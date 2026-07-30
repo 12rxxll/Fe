@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="基本情報技術者試験の用語学習・問題演習・復習管理ができる無料PWA">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./assets/styles.css">
+  <title>FE Learning OS</title>
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">基本情報技術者試験</p>
+      <h1>FE Learning OS</h1>
+    </div>
+    <button id="installButton" class="icon-button hidden" type="button" aria-label="アプリをインストール">追加</button>
+  </header>
+
+  <main id="app" class="app-main">
+    <section id="view-home" class="view active" aria-labelledby="homeTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">Dashboard</p><h2 id="homeTitle">今日の学習</h2></div>
+        <span id="todayLabel" class="subtle"></span>
+      </div>
+
+      <div class="hero-card">
+        <div>
+          <span class="hero-label">今日の問題</span>
+          <strong id="dailyProgressText">0 / 10</strong>
+          <div class="progress-track"><span id="dailyProgressBar"></span></div>
+        </div>
+        <button id="quickStartButton" class="primary large" type="button">10問スタート</button>
+      </div>
+
+      <div class="stats-grid">
+        <article class="stat-card"><span>連続学習</span><strong id="streakValue">0日</strong><small>現在のストリーク</small></article>
+        <article class="stat-card"><span>正答率</span><strong id="accuracyValue">—</strong><small>累計</small></article>
+        <article class="stat-card"><span>学習済み</span><strong id="studiedValue">0</strong><small id="studiedCaption">全用語</small></article>
+        <article class="stat-card"><span>要復習</span><strong id="dueValue">0</strong><small>今日までの期限</small></article>
+      </div>
+
+      <section class="panel">
+        <div class="panel-title-row"><h3>学習準備度</h3><strong id="readinessValue">0%</strong></div>
+        <div class="progress-track tall"><span id="readinessBar"></span></div>
+        <p class="help">学習範囲のカバー率と問題正答率から算出した参考値です。合格確率ではありません。</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title-row"><h3>最近14日間</h3><span class="subtle">解答数</span></div>
+        <div id="activityChart" class="activity-chart" aria-label="最近14日間の解答数"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title-row"><h3>分野別</h3><button class="text-button" data-nav="progress" type="button">詳細</button></div>
+        <div id="homeCategoryProgress" class="stack-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title-row"><h3>優先して復習</h3><button class="text-button" data-nav="review" type="button">一覧</button></div>
+        <div id="weakList" class="stack-list"></div>
+      </section>
+    </section>
+
+    <section id="view-study" class="view" aria-labelledby="studyTitle">
+      <div class="section-heading"><div><p class="eyebrow">Glossary</p><h2 id="studyTitle">用語学習</h2></div><strong id="termCountLabel" class="subtle"></strong></div>
+      <div class="panel controls-panel">
+        <label class="search-box"><span aria-hidden="true">⌕</span><input id="termSearch" type="search" placeholder="用語・解説・関連語を検索" autocomplete="off"></label>
+        <div class="filter-row">
+          <select id="systemFilter" aria-label="系で絞り込み"><option value="">すべての系</option></select>
+          <select id="masteryFilter" aria-label="理解度で絞り込み">
+            <option value="">すべての理解度</option><option value="unlearned">未学習</option><option value="weak">苦手</option><option value="learned">学習済み</option><option value="bookmarked">ブックマーク</option>
+          </select>
+        </div>
+      </div>
+      <div id="termList" class="card-list"></div>
+      <button id="loadMoreTerms" class="secondary full hidden" type="button">さらに表示</button>
+    </section>
+
+    <section id="view-quiz" class="view" aria-labelledby="quizTitle">
+      <div class="section-heading"><div><p class="eyebrow">Practice</p><h2 id="quizTitle">問題演習</h2></div><span id="quizSessionStatus" class="subtle"></span></div>
+      <div id="quizSetup" class="panel">
+        <div class="form-grid">
+          <label>出題モード<select id="quizMode"><option value="random">ランダム</option><option value="weak">苦手優先</option><option value="due">復習期限</option><option value="unlearned">未学習優先</option></select></label>
+          <label>分野<select id="quizSystem"><option value="">全分野</option></select></label>
+          <label>問題数<select id="quizLength"><option value="5">5問</option><option value="10" selected>10問</option><option value="20">20問</option></select></label>
+          <label>問題形式<select id="quizType"><option value="mixed">ミックス</option><option value="description">説明 → 用語</option><option value="term">用語 → 説明</option></select></label>
+        </div>
+        <button id="startQuizButton" class="primary full" type="button">演習を開始</button>
+      </div>
+      <div id="quizArea" class="hidden"></div>
+    </section>
+
+    <section id="view-review" class="view" aria-labelledby="reviewTitle">
+      <div class="section-heading"><div><p class="eyebrow">Spaced repetition</p><h2 id="reviewTitle">復習</h2></div><strong id="reviewCountLabel" class="subtle"></strong></div>
+      <div class="hero-card compact">
+        <div><span class="hero-label">今日の復習期限</span><strong id="reviewHeroCount">0語</strong></div>
+        <button id="startReviewButton" class="primary" type="button">復習開始</button>
+      </div>
+      <div class="segmented" role="tablist" aria-label="復習対象の切替">
+        <button class="active" data-review-filter="due" type="button">期限</button><button data-review-filter="wrong" type="button">誤答</button><button data-review-filter="bookmark" type="button">保存</button>
+      </div>
+      <div id="reviewList" class="card-list"></div>
+    </section>
+
+    <section id="view-progress" class="view" aria-labelledby="progressTitle">
+      <div class="section-heading"><div><p class="eyebrow">Analytics</p><h2 id="progressTitle">進捗分析</h2></div></div>
+      <div class="stats-grid">
+        <article class="stat-card"><span>総解答数</span><strong id="totalAnswersValue">0</strong><small>全期間</small></article>
+        <article class="stat-card"><span>正解数</span><strong id="totalCorrectValue">0</strong><small>全期間</small></article>
+        <article class="stat-card"><span>学習日数</span><strong id="studyDaysValue">0</strong><small>1問以上解答</small></article>
+        <article class="stat-card"><span>最高連続</span><strong id="bestStreakValue">0日</strong><small>過去最高</small></article>
+      </div>
+      <section class="panel"><h3>分野別成績</h3><div id="categoryAnalytics" class="analytics-list"></div></section>
+      <section class="panel"><h3>間違えやすい用語</h3><div id="mistakeRanking" class="stack-list"></div></section>
+    </section>
+
+    <section id="view-settings" class="view" aria-labelledby="settingsTitle">
+      <div class="section-heading"><div><p class="eyebrow">Settings</p><h2 id="settingsTitle">設定</h2></div></div>
+      <section class="panel form-stack">
+        <label>1日の目標問題数<input id="dailyGoalInput" type="number" min="1" max="100" step="1"></label>
+        <label>試験予定日<input id="examDateInput" type="date"></label>
+        <label>表示テーマ<select id="themeInput"><option value="system">端末設定</option><option value="light">ライト</option><option value="dark">ダーク</option></select></label>
+        <button id="saveSettingsButton" class="primary" type="button">設定を保存</button>
+      </section>
+      <section class="panel">
+        <h3>データ管理</h3><p class="help">進捗はこのブラウザ内に保存されます。端末変更前にバックアップしてください。</p>
+        <div class="button-stack"><button id="exportButton" class="secondary full" type="button">バックアップを書き出す</button><label class="file-button secondary full">バックアップを読み込む<input id="importInput" type="file" accept="application/json,.json"></label><button id="resetButton" class="danger full" type="button">学習データを削除</button></div>
+      </section>
+      <section class="panel">
+        <h3>無料AI連携</h3><p class="help">API料金を使わず、選択中の用語をChatGPTへ質問する文章をコピーできます。</p>
+        <button id="copyGeneralPromptButton" class="secondary full" type="button">弱点分析用プロンプトをコピー</button>
+      </section>
+      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.0.0</p><p>オフライン対応・GitHub Pages対応</p></section>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="メインメニュー">
+    <button class="active" data-nav="home" type="button"><span>⌂</span>ホーム</button>
+    <button data-nav="study" type="button"><span>▤</span>用語</button>
+    <button data-nav="quiz" type="button"><span>?</span>問題</button>
+    <button data-nav="review" type="button"><span>↻</span>復習</button>
+    <button data-nav="progress" type="button"><span>▥</span>分析</button>
+    <button data-nav="settings" type="button"><span>⚙</span>設定</button>
+  </nav>
+
+  <dialog id="termDialog"><div id="termDialogContent" class="dialog-body"></div></dialog>
+  <dialog id="resultDialog"><div id="resultDialogContent" class="dialog-body"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="./assets/terms-data.js"></script>
+  <script src="./assets/app.js"></script>
+</body>
+</html>
