@@ -167,6 +167,38 @@
         <div id="mapRecommendation" class="map-recommendation-body"></div>
       </section>
 
+      <section class="panel memorization-panel" aria-labelledby="memorizationTitle">
+        <div class="panel-title-row">
+          <h3 id="memorizationTitle">暗記モード</h3>
+          <strong id="memorizationStatusBadge" class="memorization-badge">OFF</strong>
+        </div>
+        <div class="memorization-switches" role="group" aria-label="暗記モード設定">
+          <label class="checkbox-row"><input id="memorizationModeToggle" type="checkbox">暗記モード</label>
+          <label class="checkbox-row"><input id="memorizationSensorToggle" type="checkbox">センサ操作</label>
+        </div>
+        <div class="memorization-actions">
+          <button id="memorizationRevealButton" class="primary" type="button">現在の答えを見る</button>
+          <button id="memorizationAllButton" class="secondary" type="button">すべて表示</button>
+          <button id="memorizationRecalibrateButton" class="secondary" type="button">センサ再調整</button>
+        </div>
+        <p id="memorizationHint" class="help">暗記モードをONにすると、自分の記述だけを隠します。センサなしでもボタンで表示できます。</p>
+        <div id="memorizationSensorPanel" class="memorization-sensor-panel">
+          <div class="panel-title-row compact">
+            <strong>センサ状態</strong>
+            <button id="memorizationPanelToggle" class="text-button" type="button" aria-expanded="true">たたむ</button>
+          </div>
+          <div id="memorizationSensorPanelBody">
+            <div class="memorization-status-grid">
+              <span>センサ</span><strong id="memorizationSensorStatus">未開始</strong>
+              <span>基準との差</span><strong id="memorizationTiltValue">0°</strong>
+              <span>状態</span><strong id="memorizationTiltDecision">答えを隠しています</strong>
+              <span>表示まで</span><strong id="memorizationTiltRemaining">あと25°</strong>
+            </div>
+            <div class="sensor-gauge" aria-hidden="true"><span id="memorizationTiltGauge"></span><i></i></div>
+          </div>
+        </div>
+      </section>
+
       <section class="panel map-chatgpt-panel">
         <div class="panel-title-row"><h3>記述をChatGPTで確認</h3><strong id="noteBatchReadyCount" class="subtle">0語</strong></div>
         <p id="noteBatchSummary" class="help"></p>
@@ -236,6 +268,16 @@
         <label>表示テーマ<select id="themeInput"><option value="system">端末設定</option><option value="light">ライト</option><option value="dark">ダーク</option></select></label>
         <button id="saveSettingsButton" class="primary" type="button">設定を保存</button>
       </section>
+      <section class="panel form-stack">
+        <h3>暗記モード</h3>
+        <label class="checkbox-row settings-check"><input id="memorizationDefaultInput" type="checkbox">起動時に暗記モードをON</label>
+        <label class="checkbox-row settings-check"><input id="memorizationSensorDefaultInput" type="checkbox">暗記モード開始時にセンサ操作をON</label>
+        <label>表示開始しきい値（度）<input id="memorizationShowThresholdInput" type="number" min="12" max="60" step="1"></label>
+        <label>非表示しきい値（度）<input id="memorizationHideThresholdInput" type="number" min="3" max="59" step="1"></label>
+        <label>表示判定の維持時間（ms）<input id="memorizationHoldMsInput" type="number" min="200" max="2000" step="50"></label>
+        <label>手動表示方式<select id="memorizationManualModeInput"><option value="hold">長押し中だけ表示</option><option value="tap">タップで表示切替</option></select></label>
+        <label class="checkbox-row settings-check"><input id="memorizationPanelVisibleInput" type="checkbox">センサパネルを表示</label>
+      </section>
       <section class="panel">
         <h3>データ管理</h3><p class="help">進捗はこのブラウザ内に保存されます。端末変更前にバックアップしてください。</p>
         <div class="button-stack"><button id="exportButton" class="secondary full" type="button">バックアップを書き出す</button><label class="file-button secondary full">バックアップを読み込む<input id="importInput" type="file" accept="application/json,.json"></label><button id="resetButton" class="danger full" type="button">学習データを削除</button></div>
@@ -244,7 +286,7 @@
         <h3>無料AI連携</h3><p class="help">API料金を使わず、選択中の用語をChatGPTへ質問する文章をコピーできます。</p>
         <button id="copyGeneralPromptButton" class="secondary full" type="button">今日の弱点を整理する質問文をコピー</button>
       </section>
-      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.0.0</p><p>オフライン対応・GitHub Pages対応</p></section>
+      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.1.0</p><p>オフライン対応・GitHub Pages対応</p></section>
     </section>
   </main>
 
