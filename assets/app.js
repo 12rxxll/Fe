@@ -31,6 +31,7 @@ let knowledgeNoteSaveTimer = null;
 let knowledgeFeedbackSaveTimer = null;
 let activeKnowledgeNoteTermId = '';
 let knowledgeNoteComposing = false;
+let knowledgeCompositionBlockUntil = 0;
 let pendingNoteSubmission = null;
 const knowledgeExpandedCategories = new Set();
 const knowledgeCategoryLimits = new Map();
@@ -199,6 +200,8 @@ function setup(){
   $('notePrevTermButton').addEventListener('click',()=>navigateKnowledgeNote(-1));
   $('noteNextTermButton').addEventListener('click',()=>navigateKnowledgeNote(1));
   document.addEventListener('keydown',handleKnowledgeNoteKeydown);
+  document.addEventListener('compositionstart',handleKnowledgeCompositionStart,true);
+  document.addEventListener('compositionend',handleKnowledgeCompositionEnd,true);
   if(window.visualViewport)visualViewport.addEventListener('resize',positionKnowledgeNoteToolbar);
   $('appTermCount').textContent=`${TERMS.length}語`;
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;$('installButton').classList.remove('hidden');});
@@ -614,13 +617,15 @@ function bindKnowledgeFeedbackArea(area){
   area.oninput=()=>{clearTimeout(knowledgeFeedbackSaveTimer);knowledgeFeedbackSaveTimer=setTimeout(()=>{saveKnowledgeReview(termId,{feedback:area.value});setStatus();},700);};
   area.onblur=()=>{clearTimeout(knowledgeFeedbackSaveTimer);saveKnowledgeReview(termId,{feedback:area.value});setStatus();};
 }
+function handleKnowledgeCompositionStart(e){if(e.target?.matches?.('.knowledge-note-area')){knowledgeNoteComposing=true;knowledgeCompositionBlockUntil=Date.now()+800;}}
+function handleKnowledgeCompositionEnd(e){if(e.target?.matches?.('.knowledge-note-area')){knowledgeNoteComposing=false;knowledgeCompositionBlockUntil=Date.now()+300;}}
 function bindKnowledgeNoteArea(area){
   const section=area.closest('.knowledge-note-section'),status=section?.querySelector('[data-map-note-status]'),termId=area.dataset.mapNoteTerm;
   const setStatus=msg=>{if(status)status.textContent=msg;};
   const saveNow=()=>{clearTimeout(knowledgeNoteSaveTimer);saveKnowledgeTermNote(termId,area.value);setStatus('保存しました');};
   area.oninput=()=>{setStatus('保存中...');clearTimeout(knowledgeNoteSaveTimer);knowledgeNoteSaveTimer=setTimeout(saveNow,600);};
-  area.oncompositionstart=()=>{knowledgeNoteComposing=true;};
-  area.oncompositionend=()=>{knowledgeNoteComposing=false;};
+  area.oncompositionstart=handleKnowledgeCompositionStart;
+  area.oncompositionend=handleKnowledgeCompositionEnd;
   area.onfocus=()=>{activeKnowledgeNoteTermId=termId;updateKnowledgeNoteToolbar();};
   area.onblur=()=>{saveNow();setTimeout(()=>{if(!document.activeElement?.matches?.('.knowledge-note-area'))hideKnowledgeNoteToolbar();},180);};
 }
@@ -647,7 +652,7 @@ function focusKnowledgeNoteTerm(termId){
   },0);
 }
 function navigateKnowledgeNote(direction){
-  if(knowledgeNoteComposing)return;
+  if(knowledgeNoteComposing||Date.now()<knowledgeCompositionBlockUntil)return;
   const current=qs(`.knowledge-note-area[data-map-note-term="${CSS.escape(activeKnowledgeNoteTermId||selectedKnowledgeTermId)}"]`);
   if(current)saveKnowledgeTermNote(current.dataset.mapNoteTerm,current.value);
   const ids=visibleKnowledgeTermIds(),idx=ids.indexOf(activeKnowledgeNoteTermId||selectedKnowledgeTermId),next=ids[idx+direction];
@@ -655,7 +660,7 @@ function navigateKnowledgeNote(direction){
   focusKnowledgeNoteTerm(next);
 }
 function handleKnowledgeNoteKeydown(e){
-  if(!e.ctrlKey||knowledgeNoteComposing||!e.target?.matches?.('.knowledge-note-area'))return;
+  if(!e.ctrlKey||knowledgeNoteComposing||Date.now()<knowledgeCompositionBlockUntil||!e.target?.matches?.('.knowledge-note-area'))return;
   if(e.key==='ArrowUp'){e.preventDefault();navigateKnowledgeNote(-1);}
   if(e.key==='ArrowDown'){e.preventDefault();navigateKnowledgeNote(1);}
 }
