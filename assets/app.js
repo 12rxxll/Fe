@@ -7,9 +7,9 @@ const KNOWLEDGE_TERMS = knowledgeMapTermsToGlossary(KMAP_DATA);
 const TERMS = mergeTerms(CORE_TERMS, SYLLABUS_TERMS, KNOWLEDGE_TERMS);
 const SUBJECT_A = Array.isArray(window.FE_SUBJECT_A_QUESTIONS) ? window.FE_SUBJECT_A_QUESTIONS : [];
 const STORAGE_KEY = 'fe-learning-os-v2';
-const DATA_SCHEMA = 5;
+const DATA_SCHEMA = 6;
 const DAY = 86400000;
-const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system'},terms:{},attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
+const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system'},terms:{},knowledgeNotes:{},attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
 let needsMigrationSave = false;
 let state = loadState();
 let currentView = 'home';
@@ -23,6 +23,7 @@ let knowledgeMapService = null;
 let selectedKnowledgeTermId = '';
 let knowledgeMapDefaultsApplied = false;
 let knowledgeMapMode = 'overview';
+let knowledgeNoteSaveTimer = null;
 const knowledgeExpandedCategories = new Set();
 const knowledgeCategoryLimits = new Map();
 const termById = new Map(TERMS.map(t => [String(t.id), t]));
@@ -69,7 +70,7 @@ function knowledgeMapTermsToGlossary(data){
 function getSystems(){return unique(TERMS.map(t=>t['系']));}
 function emptyTermState(){return {mastery:0,correct:0,wrong:0,knowledgeCorrect:0,knowledgeWrong:0,streak:0,consecutiveIncorrect:0,ease:2.5,interval:0,repetitions:0,due:null,nextReview:null,last:null,lastCorrect:null,lastWrong:null,learnedAt:null,updatedAt:null,reviewPriority:0,bookmark:false,note:'',weakReasons:[]};}
 function migrateTermState(value={}){const s=Object.assign(emptyTermState(),value||{});s.mastery=clamp(Number(s.mastery)||0,0,5);s.correct=Math.max(0,Number(s.correct)||0);s.wrong=Math.max(0,Number(s.wrong)||0);s.knowledgeCorrect=Math.max(0,Number(s.knowledgeCorrect)||0);s.knowledgeWrong=Math.max(0,Number(s.knowledgeWrong)||0);s.streak=Math.max(0,Number(s.streak)||0);s.consecutiveIncorrect=Math.max(0,Number(s.consecutiveIncorrect)||0);s.ease=Math.max(1.3,Number(s.ease)||2.5);s.interval=Math.max(0,Number(s.interval)||0);s.repetitions=Math.max(0,Number(s.repetitions)||0);s.due=s.due||s.nextReview||null;s.nextReview=s.nextReview||s.due||null;s.last=s.last||s.lastCorrect||s.lastWrong||null;s.reviewPriority=Math.max(0,Number(s.reviewPriority)||0);s.weakReasons=Array.isArray(s.weakReasons)?s.weakReasons:[];return s;}
-function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
+function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
 function termStateNeedsMigration(s){return !('nextReview' in s)||!('lastCorrect' in s)||!('lastWrong' in s)||!('reviewPriority' in s)||!('knowledgeCorrect' in s)||!('knowledgeWrong' in s)||!('consecutiveIncorrect' in s)||!('weakReasons' in s);}
 function readTermState(id){id=String(id);if(!state.terms[id])return emptyTermState();if(termStateNeedsMigration(state.terms[id]))state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
 function getTermState(id){id=String(id);if(!state.terms[id]) state.terms[id]=emptyTermState();else if(termStateNeedsMigration(state.terms[id])) state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
@@ -307,7 +308,7 @@ function renderKnowledgeNode(term,svc){
 }
 function renderKnowledgeInlineDetail(term,svc){
   const progress=svc.progressForTerm(term.id),prereq=svc.getPrerequisites(term.id),connected=svc.getConnectedTerms(term.id).filter(x=>!prereq.some(p=>p.id===x.id)),reasons=svc.weakReasons(term.id);
-  return `<article class="knowledge-inline-detail" data-map-inline-detail="${esc(term.id)}" aria-label="${esc(term.name)}の詳細"><div class="knowledge-inline-head"><div><h4>${esc(term.name)}</h4><p class="lead-copy">${esc(term.shortDescription)}</p></div><button class="knowledge-inline-close" data-map-collapse-detail type="button" aria-label="詳細を閉じる"><span aria-hidden="true">×</span></button></div><div class="progress-track"><span style="width:${progress.masteryScore}%"></span></div><div class="badges"><span class="badge gray">${esc(progress.statusMarker)} ${esc(progress.statusLabel)}</span><span class="badge gray">習熟度 ${progress.masteryScore}%</span><span class="badge gray">重要度 ${term.importance}</span><span class="badge gray">難易度 ${term.difficulty}</span>${progress.nextReviewAt?`<span class="badge ${progress.nextReviewAt<=localDate()?'bad':'gray'}">次回 ${esc(formatReviewDate(progress.nextReviewAt))}</span>`:''}</div><section class="map-detail-section"><h5>詳しい説明</h5><p>${esc(term.detailedDescription)}</p>${term.example?`<p class="help"><b>具体例:</b> ${esc(term.example)}</p>`:''}</section><section class="map-detail-section"><h5>前提用語</h5><div class="map-relation-list">${prereq.length?prereq.slice(0,8).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">前提はありません。</span>'}</div></section><section class="map-detail-section"><h5>関連用語</h5><div class="map-relation-list">${connected.length?connected.slice(0,8).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">関連語はまだ登録されていません。</span>'}</div></section>${reasons.length?`<section class="map-detail-section"><h5>苦手理由</h5><p class="help">${esc(reasons.join('、'))}</p></section>`:''}<div class="knowledge-inline-actions"><button class="secondary" data-map-study-term="${esc(term.id)}" type="button" ${term.appTermId?'':'disabled'}>学習</button><button class="primary" data-map-practice-term="${esc(term.id)}" type="button" ${term.appTermId?'':'disabled'}>問題</button><button class="secondary" data-map-related-practice-term="${esc(term.id)}" type="button">関連語</button><button class="secondary" data-map-chatgpt-term="${esc(term.id)}" type="button">ChatGPT</button></div><p class="help">ChatGPTボタンは質問文をコピーしてChatGPTを開きます。APIキーや詳しい学習履歴は使いません。</p></article>`;
+  return `<article class="knowledge-inline-detail" data-map-inline-detail="${esc(term.id)}" aria-label="${esc(term.name)}の詳細"><div class="knowledge-inline-head"><div><h4>${esc(term.name)}</h4><p class="lead-copy">${esc(term.shortDescription)}</p></div><button class="knowledge-inline-close" data-map-collapse-detail type="button" aria-label="詳細を閉じる"><span aria-hidden="true">×</span></button></div><div class="progress-track"><span style="width:${progress.masteryScore}%"></span></div><div class="badges"><span class="badge gray">${esc(progress.statusMarker)} ${esc(progress.statusLabel)}</span><span class="badge gray">習熟度 ${progress.masteryScore}%</span><span class="badge gray">重要度 ${term.importance}</span><span class="badge gray">難易度 ${term.difficulty}</span>${progress.nextReviewAt?`<span class="badge ${progress.nextReviewAt<=localDate()?'bad':'gray'}">次回 ${esc(formatReviewDate(progress.nextReviewAt))}</span>`:''}</div><section class="map-detail-section"><h5>詳しい説明</h5><p>${esc(term.detailedDescription)}</p>${term.example?`<p class="help"><b>具体例:</b> ${esc(term.example)}</p>`:''}</section><section class="map-detail-section"><h5>前提用語</h5><div class="map-relation-list">${prereq.length?prereq.slice(0,8).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">前提はありません。</span>'}</div></section><section class="map-detail-section"><h5>関連用語</h5><div class="map-relation-list">${connected.length?connected.slice(0,8).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">関連語はまだ登録されていません。</span>'}</div></section>${reasons.length?`<section class="map-detail-section"><h5>苦手理由</h5><p class="help">${esc(reasons.join('、'))}</p></section>`:''}<div class="knowledge-inline-actions single"><button class="secondary" data-map-chatgpt-term="${esc(term.id)}" type="button">ChatGPT</button></div><section class="map-detail-section knowledge-note-section"><h5>自分の言葉でまとめる</h5><textarea class="knowledge-note-area" data-map-note-term="${esc(term.id)}" placeholder="ここに自分の言葉で短くまとめる">${esc(readKnowledgeTermNote(term))}</textarea><p class="help" data-map-note-status>入力すると自動保存されます。</p></section><div class="knowledge-inline-actions"><button class="primary" data-map-practice-term="${esc(term.id)}" type="button" ${term.appTermId?'':'disabled'}>問題</button><button class="secondary" data-map-related-practice-term="${esc(term.id)}" type="button">関連用語</button></div><p class="help">ChatGPTボタンは質問文をコピーしてChatGPTを開きます。APIキーや詳しい学習履歴は使いません。</p></article>`;
 }
 function renderKnowledgeOverview(svc,summary){
   const panel=$('knowledgeOverviewPanel');
@@ -324,10 +325,10 @@ function bindKnowledgeMapActions(){
   $$('[data-map-load-category]').forEach(button=>button.onclick=()=>{const id=button.dataset.mapLoadCategory;knowledgeCategoryLimits.set(id,(knowledgeCategoryLimits.get(id)||48)+48);knowledgeExpandedCategories.add(id);renderKnowledgeMap();});
   $$('[data-map-overview-category]').forEach(button=>button.onclick=()=>{const svc=getKnowledgeService(),id=button.dataset.mapOverviewCategory;knowledgeMapMode='tree';expandKnowledgeCategoryPath(id,svc);renderKnowledgeMap();setTimeout(()=>qs(`[data-map-category-id="${CSS.escape(id)}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),0);});
   $$('[data-map-collapse-detail]').forEach(button=>button.onclick=()=>{selectedKnowledgeTermId='';renderKnowledgeMap();const panel=$('knowledgeDetailPanel');if(panel)panel.innerHTML='<p class="empty">用語ノードを選択すると詳細を表示します。</p>';});
-  $$('[data-map-study-term]').forEach(button=>button.onclick=()=>startKnowledgeTermStudy(button.dataset.mapStudyTerm));
   $$('[data-map-practice-term]').forEach(button=>button.onclick=()=>startKnowledgeTermPractice(button.dataset.mapPracticeTerm,false));
   $$('[data-map-related-practice-term]').forEach(button=>button.onclick=()=>startKnowledgeTermPractice(button.dataset.mapRelatedPracticeTerm,true));
   $$('[data-map-chatgpt-term]').forEach(button=>button.onclick=()=>openKnowledgeTermChatGPT(button.dataset.mapChatgptTerm));
+  $$('[data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
 }
 function renderKnowledgeDetail(termId){
   const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term)return;
@@ -340,8 +341,28 @@ function renderKnowledgeDetail(termId){
   $('mapChatGPTButton').onclick=()=>openKnowledgeTermChatGPT(term.id);
 }
 function relationTermButton(term,svc){const p=svc.progressForTerm(term.id);return `<button class="badge gray map-related-term" data-map-term-id="${esc(term.id)}" type="button">${esc(p.statusMarker)} ${esc(term.name)}</button>`;}
+function readKnowledgeTermNote(term){
+  if(!term)return '';
+  if(term.appTermId)return readTermState(term.appTermId).note||'';
+  const item=(state.knowledgeNotes||{})[term.id];
+  return typeof item==='string'?item:(item&&item.note)||'';
+}
+function saveKnowledgeTermNote(termId,value){
+  const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term)return;
+  const note=String(value||'').trim();
+  if(term.appTermId){const writable=getTermState(term.appTermId);writable.note=note;writable.updatedAt=localDate();}
+  else {if(!state.knowledgeNotes||typeof state.knowledgeNotes!=='object')state.knowledgeNotes={};state.knowledgeNotes[term.id]={note,updatedAt:new Date().toISOString()};}
+  saveState(false);
+}
+function bindKnowledgeNoteArea(area){
+  const section=area.closest('.knowledge-note-section'),status=section?.querySelector('[data-map-note-status]'),termId=area.dataset.mapNoteTerm;
+  const setStatus=msg=>{if(status)status.textContent=msg;};
+  const saveNow=()=>{clearTimeout(knowledgeNoteSaveTimer);saveKnowledgeTermNote(termId,area.value);setStatus('保存しました');};
+  area.oninput=()=>{setStatus('保存中...');clearTimeout(knowledgeNoteSaveTimer);knowledgeNoteSaveTimer=setTimeout(saveNow,600);};
+  area.onblur=saveNow;
+}
 function buildKnowledgeTermPrompt(term,svc){
-  const progress=svc.progressForTerm(term.id),path=svc.getCategoryPath(term.categoryId).map(x=>x.name).join(' > ')||'知識マップ',prereq=svc.getPrerequisites(term.id).map(x=>x.name).slice(0,6).join('、')||'なし',connected=svc.getConnectedTerms(term.id).map(x=>x.name).slice(0,8).join('、')||'なし',reasons=svc.weakReasons(term.id).slice(0,3).join('、')||'特になし';
+  const progress=svc.progressForTerm(term.id),path=svc.getCategoryPath(term.categoryId).map(x=>x.name).join(' > ')||'知識マップ',prereq=svc.getPrerequisites(term.id).map(x=>x.name).slice(0,6).join('、')||'なし',connected=svc.getConnectedTerms(term.id).map(x=>x.name).slice(0,8).join('、')||'なし',reasons=svc.weakReasons(term.id).slice(0,3).join('、')||'特になし',note=readKnowledgeTermNote(term)||'未記入';
   return `基本情報技術者試験の用語「${term.name}」について、初心者にも分かるように説明してください。
 
 現在の学習情報:
@@ -353,6 +374,7 @@ function buildKnowledgeTermPrompt(term,svc){
 - 関連用語: ${connected}
 - 学習状態: ${progress.statusLabel}、習熟度${progress.masteryScore}%、正解${formatProgressCount(progress.correctAttempts)}、誤答${formatProgressCount(progress.wrongAttempts)}
 - 苦手理由: ${reasons}
+- 自分のまとめ: ${note}
 
 回答は次の順でお願いします。
 1. 一言での定義
