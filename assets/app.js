@@ -10,6 +10,9 @@ const STORAGE_KEY = 'fe-learning-os-v2';
 const DATA_SCHEMA = 7;
 const DAY = 86400000;
 const NOTE_MIN_CHARS = 10;
+const NOTE_BATCH_MAX_TERMS = 20;
+const NOTE_BATCH_MAX_CHARS = 8000;
+const CHATGPT_URL = 'https://chatgpt.com/';
 const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system'},terms:{},knowledgeNotes:{},termNotes:{},chatgptSubmissionBatches:[],attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
 let needsMigrationSave = false;
 let state = loadState();
@@ -27,6 +30,7 @@ let knowledgeMapMode = 'overview';
 let knowledgeNoteSaveTimer = null;
 let activeKnowledgeNoteTermId = '';
 let knowledgeNoteComposing = false;
+let pendingNoteSubmission = null;
 const knowledgeExpandedCategories = new Set();
 const knowledgeCategoryLimits = new Map();
 const termById = new Map(TERMS.map(t => [String(t.id), t]));
@@ -75,7 +79,8 @@ function emptyTermState(){return {mastery:0,correct:0,wrong:0,knowledgeCorrect:0
 function migrateTermState(value={}){const s=Object.assign(emptyTermState(),value||{});s.mastery=clamp(Number(s.mastery)||0,0,5);s.correct=Math.max(0,Number(s.correct)||0);s.wrong=Math.max(0,Number(s.wrong)||0);s.knowledgeCorrect=Math.max(0,Number(s.knowledgeCorrect)||0);s.knowledgeWrong=Math.max(0,Number(s.knowledgeWrong)||0);s.streak=Math.max(0,Number(s.streak)||0);s.consecutiveIncorrect=Math.max(0,Number(s.consecutiveIncorrect)||0);s.ease=Math.max(1.3,Number(s.ease)||2.5);s.interval=Math.max(0,Number(s.interval)||0);s.repetitions=Math.max(0,Number(s.repetitions)||0);s.due=s.due||s.nextReview||null;s.nextReview=s.nextReview||s.due||null;s.last=s.last||s.lastCorrect||s.lastWrong||null;s.reviewPriority=Math.max(0,Number(s.reviewPriority)||0);s.weakReasons=Array.isArray(s.weakReasons)?s.weakReasons:[];return s;}
 function emptyTermNoteRecord(content=''){return {content:String(content||''),updatedAt:null,writingStatus:'empty',reviewStatus:'unreviewed',reviewedAt:null,lastSubmittedContent:'',lastSubmittedHash:'',lastSubmittedAt:null,lastSubmissionBatchId:null,feedbackMemo:''};}
 function migrateTermNoteRecord(value={}){const s=typeof value==='string'?{content:value}:Object.assign(emptyTermNoteRecord(),value||{});s.content=String(s.content||'');s.updatedAt=s.updatedAt||null;s.writingStatus=s.writingStatus||'empty';s.reviewStatus=s.reviewStatus||'unreviewed';s.reviewedAt=s.reviewedAt||null;s.lastSubmittedContent=String(s.lastSubmittedContent||'');s.lastSubmittedHash=String(s.lastSubmittedHash||'');s.lastSubmittedAt=s.lastSubmittedAt||null;s.lastSubmissionBatchId=s.lastSubmissionBatchId||null;s.feedbackMemo=String(s.feedbackMemo||'');return s;}
-function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches:[];s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
+function migrateSubmissionBatch(value={}){const s=Object.assign({id:'',createdAt:null,termIds:[],termNames:[],category:'',firstTerm:'',lastTerm:'',itemCount:0,totalCharacters:0,promptHash:'',status:'prepared'},value||{});s.termIds=Array.isArray(s.termIds)?s.termIds.map(String):[];s.termNames=Array.isArray(s.termNames)?s.termNames.map(String):[];s.itemCount=Math.max(0,Number(s.itemCount)||s.termIds.length);s.totalCharacters=Math.max(0,Number(s.totalCharacters)||0);s.status=String(s.status||'prepared');return s;}
+function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches.map(migrateSubmissionBatch):[];s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
 function termStateNeedsMigration(s){return !('nextReview' in s)||!('lastCorrect' in s)||!('lastWrong' in s)||!('reviewPriority' in s)||!('knowledgeCorrect' in s)||!('knowledgeWrong' in s)||!('consecutiveIncorrect' in s)||!('weakReasons' in s);}
 function readTermState(id){id=String(id);if(!state.terms[id])return emptyTermState();if(termStateNeedsMigration(state.terms[id]))state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
 function getTermState(id){id=String(id);if(!state.terms[id]) state.terms[id]=emptyTermState();else if(termStateNeedsMigration(state.terms[id])) state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
@@ -178,6 +183,9 @@ function setup(){
   $('knowledgeCollapseAllButton').addEventListener('click',()=>{knowledgeExpandedCategories.clear();knowledgeCategoryLimits.clear();renderKnowledgeMap();});
   $('knowledgeResetViewButton').addEventListener('click',()=>{$('knowledgeSearch').value='';$('knowledgeSubjectFilter').value='';$('knowledgeStatusFilter').value='';$('knowledgeWritingFilter').value='';knowledgeCategoryLimits.clear();renderKnowledgeMap();});
   $('focusRecommendationButton').addEventListener('click',()=>{const svc=getKnowledgeService(),rec=svc?.recommendNext(1)[0];if(rec){knowledgeMapMode='tree';selectedKnowledgeTermId=rec.term.id;expandKnowledgeCategoryPath(rec.term.categoryId,svc);renderKnowledgeMap();renderKnowledgeDetail(rec.term.id);}});
+  $('prepareUnsubmittedNotesButton').addEventListener('click',()=>prepareNoteSubmission('unsubmitted'));
+  $('prepareSelectedNoteButton').addEventListener('click',()=>prepareNoteSubmission('selected'));
+  $('includeSubmittedNotes').addEventListener('change',()=>renderNoteSubmissionPanel(getKnowledgeService()));
   $('startQuizButton').addEventListener('click',()=>startQuiz());
   $('startReviewButton').addEventListener('click',startDueReview);
   $$('[data-review-filter]').forEach(b=>b.addEventListener('click',()=>{reviewFilter=b.dataset.reviewFilter;syncReviewTabs();renderReview();}));
@@ -279,6 +287,7 @@ function renderKnowledgeMap(){
   $('mapWeakValue').textContent=counts.weak;
   $('mapMasteredValue').textContent=counts.mastered;
   renderKnowledgeRecommendation(svc);
+  renderNoteSubmissionPanel(svc);
   renderKnowledgeOverview(svc,summary);
   if(knowledgeMapMode!=='tree'){
     $('knowledgeMapTree').innerHTML='';
@@ -376,10 +385,14 @@ function readKnowledgeTermNote(term){return getTermNoteRecord(term,false).conten
 function saveKnowledgeTermNote(termId,value){
   const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term)return;
   const note=String(value||''),now=new Date().toISOString(),record=getTermNoteRecord(term,true);
-  record.content=note;record.updatedAt=now;record.writingStatus=writingStatusForRecord(record).key;
+  const previousHash=simpleHash(record.content),nextHash=simpleHash(note);
+  record.content=note;record.updatedAt=now;
+  if(previousHash!==nextHash&&record.lastSubmittedHash&&nextHash!==record.lastSubmittedHash){record.reviewStatus='unreviewed';record.reviewedAt=null;}
+  record.writingStatus=writingStatusForRecord(record).key;
   if(term.appTermId){const writable=getTermState(term.appTermId);writable.note=note;writable.updatedAt=localDate();}
   else {if(!state.knowledgeNotes||typeof state.knowledgeNotes!=='object')state.knowledgeNotes={};state.knowledgeNotes[term.id]={note,updatedAt:now};}
   saveState(false);
+  if(currentView==='map')updateNoteSubmissionIndicators();
 }
 function writingStatusForRecord(record){
   const content=normalizeNoteContent(record.content),hash=simpleHash(content),len=compactNoteLength(content);
@@ -438,6 +451,139 @@ function renderWritingTestSummary(){
     const terms=svc.termsForSubject(subject.id),s=writingTestStats(terms,svc);
     return `<div class="analytics-row"><strong>${esc(subject.name)}</strong><div class="progress-split compact"><div><span>記述</span><div class="progress-track"><span style="width:${s.writingRate}%"></span></div><small>${s.writingDone}/${s.total}語 ${s.writingRate}%</small></div><div><span>テスト</span><div class="progress-track"><span style="width:${s.testMasteredRate}%"></span></div><small>習得 ${s.testMastered}/${s.total}語 ${s.testMasteredRate}%</small></div></div><small>確認待ち ${s.writingPending}語・要修正 ${s.writingNeedsFix}語・出題済み ${s.testAttempted}語</small></div>`;
   }).join('');
+}
+function knowledgeTermPathLabel(term,svc){return svc.getCategoryPath(term.categoryId).map(x=>x.name).join(' > ')||knowledgeTermSubject(term,svc)||'知識マップ';}
+function noteReviewItem(term,svc){
+  const record=getTermNoteRecord(term,false),content=normalizeNoteContent(record.content),chars=compactNoteLength(content);
+  if(chars<NOTE_MIN_CHARS)return null;
+  const hash=simpleHash(content),path=knowledgeTermPathLabel(term,svc),subject=knowledgeTermSubject(term,svc)||path.split(' > ')[0]||'未分類';
+  return {term,record,termId:term.id,name:term.name,question:knowledgeWritingQuestion(term,svc),content,hash,chars,path,subject};
+}
+function collectNoteSubmissionItems(scope='unsubmitted',includeSubmitted=false,svc=getKnowledgeService()){
+  if(!svc)return {items:[],excludedCount:0,sendableCount:0,scope};
+  const selected=selectedKnowledgeTermId?svc.getTerm(selectedKnowledgeTermId):null,terms=scope==='selected'?(selected?[selected]:[]):svc.terms;
+  const sendable=terms.map(term=>noteReviewItem(term,svc)).filter(Boolean);
+  const items=sendable.filter(item=>includeSubmitted||item.hash!==String(item.record.lastSubmittedHash||''));
+  return {items,excludedCount:sendable.length-items.length,sendableCount:sendable.length,scope,selectedMissing:scope==='selected'&&!selected};
+}
+function splitNoteItems(items){
+  const batches=[];let current=[],chars=0;
+  items.forEach(item=>{
+    const itemChars=item.name.length+item.question.length+item.content.length+80;
+    if(current.length&&(current.length>=NOTE_BATCH_MAX_TERMS||chars+itemChars>NOTE_BATCH_MAX_CHARS)){batches.push({items:current,totalCharacters:chars});current=[];chars=0;}
+    current.push(item);chars+=itemChars;
+  });
+  if(current.length)batches.push({items:current,totalCharacters:chars});
+  return batches;
+}
+function formatDateTime(value){if(!value)return '未記録';return new Intl.DateTimeFormat('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(value));}
+function summarizeItemSubjects(items){const values=unique(items.map(item=>item.subject));return values.length>3?`${values.slice(0,3).join('、')}ほか`:values.join('、')||'未分類';}
+function buildNoteBatchPrompt(batch,index,total,createdAt){
+  const items=batch.items,first=items[0],last=items[items.length-1],subject=summarizeItemSubjects(items),range=`${first.name} 〜 ${last.name}`,batchLabel=total>1?`送信分割: 第${index+1}回 / 全${total}回\n`:''; 
+  return `あなたはFE試験対策の講師です。
+以下は、学習者が各用語について自分の言葉で書いた説明です。
+
+各項目について、次の観点で判定してください。
+
+1. 問いに正しく答えているか
+2. 明確な誤りがないか
+3. FE試験で必要な内容が不足していないか
+4. 混同しやすい関連用語は何か
+5. 「正しい」「一部修正が必要」「理解不足」の3段階で判定
+6. 修正が必要な場合は、どこが違うか具体的に説明
+7. 最後に、FE向けの短い模範回答を示す
+
+出力形式:
+用語:
+判定:
+正しい点:
+修正点:
+不足している点:
+関連用語:
+模範回答:
+
+対象範囲:
+分野: ${subject}
+用語数: ${items.length}
+範囲: ${range}
+生成日時: ${formatDateTime(createdAt)}
+${batchLabel}
+---
+${items.map(item=>`用語: ${item.name}
+問い:
+「${item.question}」
+
+自分の記述:
+「${item.content}」
+---`).join('\n')}`;
+}
+function batchStatusLabel(status){return {prepared:'準備済み',copied:'ChatGPTへコピー済み',openedInChatGPT:'ChatGPTを開きました',completed:'確認済み',cancelled:'キャンセル'}[status]||status;}
+function renderNoteSubmissionPanel(svc=getKnowledgeService()){
+  if(!$('noteBatchReadyCount')||!svc)return;
+  const include=$('includeSubmittedNotes')?.checked||false,unsubmitted=collectNoteSubmissionItems('unsubmitted',include,svc),submitted=collectNoteSubmissionItems('unsubmitted',true,svc).sendableCount-unsubmitted.items.length,selected=collectNoteSubmissionItems('selected',include,svc);
+  $('noteBatchReadyCount').textContent=`${unsubmitted.items.length}語`;
+  $('noteBatchSummary').textContent=`今回の新規・更新分 ${unsubmitted.items.length}語。前回送信済みの同一内容 ${Math.max(0,submitted)}語は${include?'含めます':'除外しています'}。`;
+  $('prepareUnsubmittedNotesButton').disabled=unsubmitted.items.length===0;
+  $('prepareSelectedNoteButton').disabled=selected.items.length===0;
+  const history=(state.chatgptSubmissionBatches||[]).slice(0,5);
+  $('chatgptBatchHistory').innerHTML=history.length?history.map(batch=>`<div class="stack-item"><span class="stack-item-main"><strong>${esc(formatDateTime(batch.createdAt))} ${esc(batch.category||'知識マップ')}</strong><small>${esc(batch.firstTerm||'')} 〜 ${esc(batch.lastTerm||'')}・${batch.itemCount}語・状態: ${esc(batchStatusLabel(batch.status))}</small></span></div>`).join(''):'<p class="empty compact">送信履歴はまだありません。</p>';
+}
+function updateNoteSubmissionIndicators(){
+  const svc=getKnowledgeService();if(!svc)return;
+  if($('mapWritingValue'))$('mapWritingValue').textContent=writingTestStats(svc.terms,svc).writingRate+'%';
+  renderNoteSubmissionPanel(svc);
+}
+function prepareNoteSubmission(scope){
+  const include=$('includeSubmittedNotes')?.checked||false,collected=collectNoteSubmissionItems(scope,include),batches=splitNoteItems(collected.items);
+  if(!batches.length){showToast(scope==='selected'?'選択中の用語に未送信の記述がありません':'未送信の記述がありません');return;}
+  pendingNoteSubmission={scope,include,createdAt:new Date().toISOString(),batches,batchIndex:0,excludedCount:collected.excludedCount,sendableCount:collected.sendableCount};
+  renderNoteSubmissionDialog();
+  const dialog=$('chatgptBatchDialog');if(!dialog.open)dialog.showModal();
+}
+function currentNoteSubmissionBatch(){return pendingNoteSubmission?.batches[pendingNoteSubmission.batchIndex]||null;}
+function renderNoteSubmissionDialog(){
+  const dialog=$('chatgptBatchDialog'),content=$('chatgptBatchDialogContent'),batch=currentNoteSubmissionBatch();if(!batch)return;
+  const total=pendingNoteSubmission.batches.length,index=pendingNoteSubmission.batchIndex,items=batch.items,first=items[0],last=items[items.length-1],prompt=buildNoteBatchPrompt(batch,index,total,pendingNoteSubmission.createdAt);
+  content.innerHTML=`<div class="dialog-head"><div><p class="eyebrow">ChatGPT prompt</p><h2>送信対象を確認</h2></div><button class="close-button" data-close-chatgpt-batch type="button">×</button></div><section class="result-insight"><h3>今回ChatGPTへ送る範囲</h3><p>${esc(summarizeItemSubjects(items))} / ${esc(first.path)} 〜 ${esc(last.path)}</p><div class="badges"><span class="badge gray">${items.length}語</span><span class="badge gray">${esc(first.name)} 〜 ${esc(last.name)}</span><span class="badge gray">推定 ${prompt.length}文字</span><span class="badge gray">第${index+1}回 / 全${total}回</span></div><p class="help">前回送信済みで変更のない記述は${pendingNoteSubmission.include?'含めています':'除外しています'}。</p></section><section class="detail-section"><h3>対象用語</h3><div class="submission-term-list">${items.map(item=>`<span>${esc(item.name)}</span>`).join('')}</div></section><section class="detail-section"><h3>プロンプト確認</h3><textarea class="prompt-preview" readonly>${esc(prompt)}</textarea></section><div class="dialog-actions tri"><button id="prevNoteBatchButton" class="secondary" type="button" ${index<=0?'disabled':''}>前の範囲</button><button id="nextNoteBatchButton" class="secondary" type="button" ${index>=total-1?'disabled':''}>次の範囲</button><button id="cancelNoteBatchButton" class="secondary" type="button">キャンセル</button><button id="copyNoteBatchPromptButton" class="primary" type="button">プロンプトをコピー</button><button id="openNoteBatchChatGPTButton" class="secondary" type="button">ChatGPTを開く</button></div>`;
+  qs('[data-close-chatgpt-batch]').onclick=()=>dialog.close();
+  $('cancelNoteBatchButton').onclick=()=>{dialog.close();pendingNoteSubmission=null;};
+  $('prevNoteBatchButton').onclick=()=>{pendingNoteSubmission.batchIndex--;renderNoteSubmissionDialog();};
+  $('nextNoteBatchButton').onclick=()=>{pendingNoteSubmission.batchIndex++;renderNoteSubmissionDialog();};
+  $('copyNoteBatchPromptButton').onclick=()=>copyCurrentNoteBatchPrompt(false);
+  $('openNoteBatchChatGPTButton').onclick=()=>copyCurrentNoteBatchPrompt(true);
+}
+function submissionBatchId(){return `note-batch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;}
+function markCurrentNoteBatchSubmitted(status,prompt){
+  const batch=currentNoteSubmissionBatch();if(!batch)return;
+  const now=new Date().toISOString();
+  let id=batch.submissionId,record=id?(state.chatgptSubmissionBatches||[]).find(x=>x.id===id):null;
+  if(!record){
+    id=submissionBatchId();batch.submissionId=id;
+    record={id,createdAt:now,termIds:batch.items.map(item=>item.termId),termNames:batch.items.map(item=>item.name),category:summarizeItemSubjects(batch.items),firstTerm:batch.items[0].name,lastTerm:batch.items[batch.items.length-1].name,itemCount:batch.items.length,totalCharacters:prompt.length,promptHash:simpleHash(prompt),status};
+    state.chatgptSubmissionBatches=[record,...(state.chatgptSubmissionBatches||[])].slice(0,50);
+    batch.items.forEach(item=>{
+      const target=getTermNoteRecord(item.term,true);
+      target.lastSubmittedContent=normalizeNoteContent(target.content);
+      target.lastSubmittedHash=simpleHash(target.content);
+      target.lastSubmittedAt=now;
+      target.lastSubmissionBatchId=id;
+      target.reviewStatus='unreviewed';
+      target.reviewedAt=null;
+      target.writingStatus=writingStatusForRecord(target).key;
+    });
+  } else {
+    record.status=status==='openedInChatGPT'?'openedInChatGPT':record.status;
+  }
+  saveState(false);
+  updateNoteSubmissionIndicators();
+}
+function copyCurrentNoteBatchPrompt(openChatGPT=false){
+  const batch=currentNoteSubmissionBatch();if(!batch)return;
+  const prompt=buildNoteBatchPrompt(batch,pendingNoteSubmission.batchIndex,pendingNoteSubmission.batches.length,pendingNoteSubmission.createdAt);
+  copyText(prompt,openChatGPT?'プロンプトをコピーしました。ChatGPTを開きます':'プロンプトをコピーしました');
+  markCurrentNoteBatchSubmitted(openChatGPT?'openedInChatGPT':'copied',prompt);
+  renderNoteSubmissionDialog();
+  if(openChatGPT){const opened=window.open(CHATGPT_URL,'_blank','noopener');if(!opened)showToast('プロンプトをコピーしました。ChatGPTに貼り付けてください');}
 }
 function bindKnowledgeNoteArea(area){
   const section=area.closest('.knowledge-note-section'),status=section?.querySelector('[data-map-note-status]'),termId=area.dataset.mapNoteTerm;

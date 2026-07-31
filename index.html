@@ -167,6 +167,17 @@
         <div id="mapRecommendation" class="map-recommendation-body"></div>
       </section>
 
+      <section class="panel map-chatgpt-panel">
+        <div class="panel-title-row"><h3>記述をChatGPTで確認</h3><strong id="noteBatchReadyCount" class="subtle">0語</strong></div>
+        <p id="noteBatchSummary" class="help"></p>
+        <label class="checkbox-row"><input id="includeSubmittedNotes" type="checkbox">前回送信済みの同一内容も含める</label>
+        <div class="knowledge-inline-actions">
+          <button id="prepareUnsubmittedNotesButton" class="primary" type="button">未送信をまとめる</button>
+          <button id="prepareSelectedNoteButton" class="secondary" type="button">選択中をまとめる</button>
+        </div>
+        <div id="chatgptBatchHistory" class="stack-list compact"></div>
+      </section>
+
       <div class="panel controls-panel map-controls">
         <label class="search-box"><span aria-hidden="true">⌕</span><input id="knowledgeSearch" type="search" placeholder="用語・説明・関連語を検索" autocomplete="off"></label>
         <div class="filter-row">
@@ -248,6 +259,7 @@
 
   <dialog id="termDialog"><div id="termDialogContent" class="dialog-body"></div></dialog>
   <dialog id="resultDialog"><div id="resultDialogContent" class="dialog-body"></div></dialog>
+  <dialog id="chatgptBatchDialog"><div id="chatgptBatchDialogContent" class="dialog-body"></div></dialog>
   <div id="updateBanner" class="update-banner hidden" role="status" aria-live="polite"><span>新しい版を利用できます</span><button id="reloadUpdateButton" class="primary" type="button">更新</button></div>
   <div id="knowledgeNoteToolbar" class="note-nav-toolbar hidden" role="toolbar" aria-label="記述欄の用語移動">
     <button id="notePrevTermButton" class="secondary" type="button">↑ 前の用語</button>

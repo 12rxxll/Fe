@@ -1,4 +1,4 @@
-const CACHE = 'fe-learning-os-v2-20260801-split-progress-v11';
+const CACHE = 'fe-learning-os-v2-20260801-chatgpt-batches-v12';
 const ASSET_PATHS = [
   './',
   './index.html',
