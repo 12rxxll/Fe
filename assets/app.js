@@ -197,12 +197,9 @@ function setup(){
   $('resetButton').addEventListener('click',resetData);
   $('copyGeneralPromptButton').addEventListener('click',copyWeakPrompt);
   $('reloadUpdateButton').addEventListener('click',()=>{if(pendingServiceWorker)pendingServiceWorker.postMessage({type:'SKIP_WAITING'});});
-  $('notePrevTermButton').addEventListener('click',()=>navigateKnowledgeNote(-1));
-  $('noteNextTermButton').addEventListener('click',()=>navigateKnowledgeNote(1));
   document.addEventListener('keydown',handleKnowledgeNoteKeydown);
   document.addEventListener('compositionstart',handleKnowledgeCompositionStart,true);
   document.addEventListener('compositionend',handleKnowledgeCompositionEnd,true);
-  if(window.visualViewport)visualViewport.addEventListener('resize',positionKnowledgeNoteToolbar);
   $('appTermCount').textContent=`${TERMS.length}語`;
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;$('installButton').classList.remove('hidden');});
   $('installButton').addEventListener('click',async()=>{if(deferredInstall){deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;$('installButton').classList.add('hidden');}else{showToast('Safariの共有メニューから「ホーム画面に追加」を選択してください');}});
@@ -341,7 +338,7 @@ function knowledgeWritingQuestion(term,svc){
 function noteReviewOption(value,label,current){return `<option value="${esc(value)}" ${current===value?'selected':''}>${esc(label)}</option>`;}
 function renderKnowledgeNoteSection(term,svc,heading='h5'){
   const record=getTermNoteRecord(term,false),review=record.reviewStatus||'unreviewed';
-  return `<section class="map-detail-section knowledge-note-section"><${heading}>自分の言葉でまとめる</${heading}><p class="knowledge-note-question">${esc(knowledgeWritingQuestion(term,svc))}</p><textarea class="knowledge-note-area" data-map-note-term="${esc(term.id)}" placeholder="定義・仕組み・FEで重要な点を、自分の言葉で書いてください">${esc(readKnowledgeTermNote(term))}</textarea><p class="help" data-map-note-status>目安: 1〜3文。完璧でなくても保存できます。後でChatGPTにまとめて確認できます。</p><div class="note-review-grid"><label>ChatGPT確認結果<select data-note-review-term="${esc(term.id)}">${noteReviewOption('unreviewed','未確認',review)}${noteReviewOption('correct','正しい',review)}${noteReviewOption('needs_fix','一部修正が必要',review)}${noteReviewOption('insufficient','理解不足',review)}</select></label><label>修正メモ<textarea class="feedback-note-area" data-note-feedback-term="${esc(term.id)}" placeholder="ChatGPTの指摘や直すポイントを書く">${esc(record.feedbackMemo||'')}</textarea></label></div></section>`;
+  return `<section class="map-detail-section knowledge-note-section"><div class="note-section-head"><${heading}>自分の言葉でまとめる</${heading}><div class="note-inline-nav" role="group" aria-label="用語移動"><button class="secondary" data-note-move="-1" data-note-move-term="${esc(term.id)}" type="button">↑ 前へ</button><button class="secondary" data-note-move="1" data-note-move-term="${esc(term.id)}" type="button">↓ 次へ</button></div></div><p class="knowledge-note-question">${esc(knowledgeWritingQuestion(term,svc))}</p><textarea class="knowledge-note-area" data-map-note-term="${esc(term.id)}" placeholder="定義・仕組み・FEで重要な点を、自分の言葉で書いてください">${esc(readKnowledgeTermNote(term))}</textarea><p class="help" data-map-note-status>目安: 1〜3文。完璧でなくても保存できます。後でChatGPTにまとめて確認できます。</p><div class="note-review-grid"><label>ChatGPT確認結果<select data-note-review-term="${esc(term.id)}">${noteReviewOption('unreviewed','未確認',review)}${noteReviewOption('correct','正しい',review)}${noteReviewOption('needs_fix','一部修正が必要',review)}${noteReviewOption('insufficient','理解不足',review)}</select></label><label>修正メモ<textarea class="feedback-note-area" data-note-feedback-term="${esc(term.id)}" placeholder="ChatGPTの指摘や直すポイントを書く">${esc(record.feedbackMemo||'')}</textarea></label></div></section>`;
 }
 function renderKnowledgeInlineDetail(term,svc){
   const progress=svc.progressForTerm(term.id),writing=writingProgressForTerm(term),test=testProgressForTerm(term,svc),prereq=svc.getPrerequisites(term.id),connected=svc.getConnectedTerms(term.id).filter(x=>!prereq.some(p=>p.id===x.id)),reasons=svc.weakReasons(term.id);
@@ -366,6 +363,8 @@ function bindKnowledgeMapActions(){
   $$('[data-map-related-practice-term]').forEach(button=>button.onclick=()=>startKnowledgeTermPractice(button.dataset.mapRelatedPracticeTerm,true));
   $$('[data-map-chatgpt-term]').forEach(button=>button.onclick=()=>openKnowledgeTermChatGPT(button.dataset.mapChatgptTerm));
   $$('[data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
+  $$('[data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
+  updateInlineNoteNavButtons();
   $$('[data-note-review-term]').forEach(select=>bindKnowledgeReviewSelect(select));
   $$('[data-note-feedback-term]').forEach(area=>bindKnowledgeFeedbackArea(area));
 }
@@ -378,6 +377,8 @@ function renderKnowledgeDetail(termId){
   $('mapRelatedPracticeButton').onclick=()=>startKnowledgeTermPractice(term.id,true);
   $('mapChatGPTButton').onclick=()=>openKnowledgeTermChatGPT(term.id);
   $$('#knowledgeDetailPanel [data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
+  $$('#knowledgeDetailPanel [data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
+  updateInlineNoteNavButtons();
   $$('#knowledgeDetailPanel [data-note-review-term]').forEach(select=>bindKnowledgeReviewSelect(select));
   $$('#knowledgeDetailPanel [data-note-feedback-term]').forEach(area=>bindKnowledgeFeedbackArea(area));
 }
@@ -626,21 +627,19 @@ function bindKnowledgeNoteArea(area){
   area.oninput=()=>{setStatus('保存中...');clearTimeout(knowledgeNoteSaveTimer);knowledgeNoteSaveTimer=setTimeout(saveNow,600);};
   area.oncompositionstart=handleKnowledgeCompositionStart;
   area.oncompositionend=handleKnowledgeCompositionEnd;
-  area.onfocus=()=>{activeKnowledgeNoteTermId=termId;updateKnowledgeNoteToolbar();};
-  area.onblur=()=>{saveNow();setTimeout(()=>{if(!document.activeElement?.matches?.('.knowledge-note-area'))hideKnowledgeNoteToolbar();},180);};
+  area.onfocus=()=>{activeKnowledgeNoteTermId=termId;updateInlineNoteNavButtons();};
+  area.onblur=()=>{saveNow();};
 }
 function visibleKnowledgeTermIds(){return $$('.knowledge-node[data-map-term-id]').map(button=>button.dataset.mapTermId).filter(Boolean);}
-function updateKnowledgeNoteToolbar(){
-  const toolbar=$('knowledgeNoteToolbar'),ids=visibleKnowledgeTermIds(),idx=ids.indexOf(activeKnowledgeNoteTermId);
-  if(!toolbar||idx<0){hideKnowledgeNoteToolbar();return;}
-  $('notePrevTermButton').disabled=idx<=0;$('noteNextTermButton').disabled=idx>=ids.length-1;
-  toolbar.classList.remove('hidden');positionKnowledgeNoteToolbar();
+function bindKnowledgeNoteMoveButton(button){
+  button.onclick=()=>{activeKnowledgeNoteTermId=button.dataset.noteMoveTerm||selectedKnowledgeTermId;navigateKnowledgeNote(Number(button.dataset.noteMove)||0);};
 }
-function hideKnowledgeNoteToolbar(){const toolbar=$('knowledgeNoteToolbar');if(toolbar)toolbar.classList.add('hidden');}
-function positionKnowledgeNoteToolbar(){
-  const toolbar=$('knowledgeNoteToolbar');if(!toolbar||toolbar.classList.contains('hidden'))return;
-  const vv=window.visualViewport,bottom=vv?Math.max(86,Math.round(window.innerHeight-vv.height-vv.offsetTop)+8):86;
-  toolbar.style.bottom=`calc(${bottom}px + var(--safe-bottom))`;
+function updateInlineNoteNavButtons(){
+  const ids=visibleKnowledgeTermIds();
+  $$('[data-note-move]').forEach(button=>{
+    const termId=button.dataset.noteMoveTerm,idx=ids.indexOf(termId),direction=Number(button.dataset.noteMove)||0;
+    button.disabled=idx<0||!ids[idx+direction];
+  });
 }
 function focusKnowledgeNoteTerm(termId){
   const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term)return;
@@ -648,7 +647,7 @@ function focusKnowledgeNoteTerm(termId){
   setTimeout(()=>{
     const node=qs(`.knowledge-node[data-map-term-id="${CSS.escape(termId)}"]`),area=qs(`.knowledge-note-area[data-map-note-term="${CSS.escape(termId)}"]`);
     node?.scrollIntoView({behavior:'smooth',block:'center'});area?.focus({preventScroll:true});
-    if(area){area.selectionStart=area.selectionEnd=area.value.length;activeKnowledgeNoteTermId=termId;updateKnowledgeNoteToolbar();}
+    if(area){area.selectionStart=area.selectionEnd=area.value.length;activeKnowledgeNoteTermId=termId;updateInlineNoteNavButtons();}
   },0);
 }
 function navigateKnowledgeNote(direction){
