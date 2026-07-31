@@ -1,4 +1,4 @@
-const CACHE = 'fe-learning-os-v2-20260801-chatgpt-batches-v12';
+const CACHE = 'fe-learning-os-v2-20260801-note-review-v13';
 const ASSET_PATHS = [
   './',
   './index.html',

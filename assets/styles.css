@@ -1547,6 +1547,35 @@ textarea {
   font-weight: 800;
 }
 
+.note-review-grid {
+  display: grid;
+  gap: 9px;
+}
+
+.note-review-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.note-review-grid select,
+.feedback-note-area {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--panel);
+  color: var(--text);
+  padding: 10px 11px;
+}
+
+.feedback-note-area {
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
 .note-nav-toolbar {
   position: fixed;
   right: 12px;
