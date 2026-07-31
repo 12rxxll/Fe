@@ -1349,6 +1349,7 @@ textarea {
   display: grid;
   gap: 12px;
   align-content: start;
+  scroll-margin-top: 86px;
 }
 
 .map-detail-head {
