@@ -1,0 +1,195 @@
+window.FE_KNOWLEDGE_MAP = (() => {
+  'use strict';
+
+  const now = '2026-07-31T00:00:00+09:00';
+  const term = (id, categoryId, name, shortDescription, detailedDescription, example, importance, difficulty, displayOrder, aliases = []) => ({
+    id,
+    categoryId,
+    name,
+    reading: '',
+    shortDescription,
+    detailedDescription,
+    example,
+    importance,
+    difficulty,
+    displayOrder,
+    aliases,
+    createdAt: now,
+    updatedAt: now
+  });
+  const rel = (sourceTermId, targetTermId, relationType) => ({
+    id: `rel-${sourceTermId}-${relationType}-${targetTermId}`,
+    sourceTermId,
+    targetTermId,
+    relationType,
+    createdAt: now
+  });
+  const qt = (questionId, termId, role, weight) => ({
+    id: `qt-${questionId}-${termId}-${role}`,
+    questionId,
+    termId,
+    role,
+    weight
+  });
+
+  const terms = [
+    term('term-binary', 'cat-number', '2進数', '0と1だけで数を表す記数法。', 'コンピュータ内部のデータや命令はビット列で扱われるため、2進数は数値表現、論理演算、アドレス計算の前提になる。', '101101(2) = 45(10)', 5, 2, 1, ['二進数']),
+    term('term-octal', 'cat-number', '8進数', '0から7までで数を表す記数法。', '3ビットを1桁にまとめられるため、2進数との対応を短く表せる。基本情報では基数変換の比較対象として扱う。', '101101(2) = 55(8)', 3, 2, 2, ['八進数']),
+    term('term-decimal', 'cat-number', '10進数', '日常的に使う基数10の記数法。', '2進数や16進数との変換先として頻出する。桁の重みが10の累乗である点を押さえる。', '45(10) は 4×10 + 5', 4, 1, 3, ['十進数']),
+    term('term-hexadecimal', 'cat-number', '16進数', '0から9とAからFで数を表す記数法。', '4ビットを1桁にまとめられるため、メモリアドレスやビット列の表記で使われる。', '101101(2) = 2D(16)', 5, 2, 4, ['十六進数']),
+    term('term-base-conversion', 'cat-number', '基数変換', '異なる基数の表記へ数を変換すること。', '2進数、8進数、10進数、16進数の桁の重みを使い、割り算または桁ごとの加算で変換する。', '45(10) を2で割り続けると 101101(2)', 5, 3, 5),
+    term('term-msb', 'cat-number', 'MSB', '最上位ビット。', 'ビット列の左端にあり、符号付き整数では符号を表すビットとして扱われることが多い。', '8ビット 10000001 のMSBは左端の1', 4, 2, 6, ['Most Significant Bit', '最上位ビット']),
+    term('term-lsb', 'cat-number', 'LSB', '最下位ビット。', 'ビット列の右端にあり、偶奇判定や桁上がりの理解で使う。', '8ビット 10000001 のLSBは右端の1', 3, 1, 7, ['Least Significant Bit', '最下位ビット']),
+    term('term-signed-integer', 'cat-number', '符号付き整数', '正負の符号を含めて表す整数。', 'MSBを符号に使う方式が多く、符号絶対値、1の補数、2の補数などの方式を比較する。', '8ビット2の補数では 11111111 は -1', 5, 3, 8),
+    term('term-sign-magnitude', 'cat-number', '符号絶対値表現', '符号ビットと絶対値で負数を表す方式。', 'MSBを符号、残りを絶対値として扱う。+0と-0が存在する点が2の補数との違い。', '10000101 は -5 を表す', 3, 3, 9),
+    term('term-ones-complement', 'cat-number', '1の補数', '各ビットを反転して負数を表す方式。', '正の数のビットを0と1で反転させる。+0と-0が存在するため、2の補数と比較して問われやすい。', '00000101 の1の補数は 11111010', 4, 3, 10),
+    term('term-twos-complement', 'cat-number', '2の補数', '1の補数に1を加えて負数を表す方式。', 'コンピュータで符号付き整数を扱う代表的な方式。減算を加算回路で扱いやすく、0の表現が一つになる。', '00000101 の2の補数は 11111011', 5, 4, 11),
+    term('term-sign-extension', 'cat-number', '符号拡張', '符号を保ったままビット数を増やすこと。', '2の補数表現ではMSBを増やした上位ビットへコピーすることで、値を変えずに桁数を増やす。', '8ビットの 11111011 を16ビットにすると 11111111 11111011', 4, 4, 12),
+    term('term-fixed-point', 'cat-number', '固定小数点数', '小数点位置を固定して表す数。', '整数部と小数部のビット数をあらかじめ決める。処理は速いが、表現範囲と精度が固定される。', '小数部4ビットなら 0011.1000 のように扱う', 4, 3, 13),
+    term('term-floating-point', 'cat-number', '浮動小数点数', '仮数部と指数部で広い範囲を表す数。', '非常に大きい数や小さい数を扱えるが、丸め誤差、オーバーフロー、アンダーフローに注意する。', '1.25×2^4 のように表す', 5, 4, 14),
+    term('term-exponent', 'cat-number', '指数部', '浮動小数点数で桁の位置を表す部分。', '数値の大きさの範囲に影響する。指数部が足りないと極端な値を表しにくい。', '1.01×2^3 の 3 に相当する部分', 4, 3, 15),
+    term('term-mantissa', 'cat-number', '仮数部', '浮動小数点数で有効数字を表す部分。', '数値の精度に影響する。仮数部のビット数が多いほど細かい値を表せる。', '1.01×2^3 の 1.01 に相当する部分', 4, 3, 16),
+    term('term-overflow', 'cat-number', 'オーバーフロー', '表現可能な最大値を超えること。', '固定長のビット数では表せない結果が出た状態。整数演算や浮動小数点数の範囲で問われる。', '8ビット符号付き整数で 127 + 1 を扱う場合', 5, 3, 17, ['オーバーフロー（あふれ）']),
+    term('term-underflow', 'cat-number', 'アンダーフロー', '表現可能な最小の絶対値より小さくなること。', '主に浮動小数点数で、小さすぎる値を表せなくなる状態。オーバーフローとの違いを押さえる。', '極小値同士を掛けて0に近づきすぎる場合', 4, 3, 18),
+
+    term('term-cpu', 'cat-cpu', 'CPU', 'コンピュータの中核となる処理装置。', '命令を取り出し、解読し、演算や制御を行う。ALU、制御装置、レジスタなどで構成される。', 'プログラムの命令を順に実行する装置', 5, 2, 1, ['中央処理装置']),
+    term('term-processor', 'cat-cpu', 'プロセッサ', '命令を実行する処理装置。', 'CPUとほぼ同義に使われることが多い。マイクロプロセッサやマルチコアなどの文脈でも出る。', 'PCやスマートフォンのSoC内で命令を処理する部分', 5, 2, 2),
+    term('term-alu', 'cat-cpu', 'ALU', '算術演算と論理演算を行う回路。', '加算、減算、AND、OR、比較などを実行する。CPUの演算機能の中心。', '加算命令で二つのレジスタ値を足す', 4, 3, 3, ['算術論理演算装置']),
+    term('term-control-unit', 'cat-cpu', '制御装置', '命令実行の流れを制御する装置。', '命令を解読し、ALU、レジスタ、メモリなどへ制御信号を出す。', 'ロード命令でメモリ読込みを指示する', 4, 3, 4),
+    term('term-register', 'cat-cpu', 'レジスタ', 'CPU内部の高速な記憶領域。', '演算対象、命令、アドレス、状態などを一時的に保持する。主記憶より高速で容量は小さい。', '加算する値を汎用レジスタに保持する', 5, 2, 5),
+    term('term-program-counter', 'cat-cpu', 'プログラムカウンタ', '次に実行する命令のアドレスを保持するレジスタ。', '命令フェッチのたびに参照され、通常は次の命令位置へ更新される。分岐命令では値が変更される。', '次の命令が格納された主記憶アドレスを指す', 5, 3, 6),
+    term('term-instruction-register', 'cat-cpu', '命令レジスタ', '取り出した命令を保持するレジスタ。', '命令フェッチ後、デコードや実行のために命令語を一時保持する。', 'フェッチした機械語命令を保持する', 4, 3, 7),
+    term('term-memory-address-register', 'cat-cpu', 'メモリアドレスレジスタ', 'アクセスするメモリアドレスを保持するレジスタ。', '主記憶から命令やデータを読み書きする際に、対象アドレスを保持する。', '命令フェッチ時にプログラムカウンタの値を保持する', 4, 3, 8, ['MAR']),
+    term('term-instruction-fetch', 'cat-cpu', '命令フェッチ', '主記憶から命令を取り出す段階。', 'プログラムカウンタが示すアドレスを使って命令を読み込み、命令レジスタへ格納する。', 'PCが示す番地から命令語を読む', 5, 3, 9),
+    term('term-decode', 'cat-cpu', 'デコード', '命令の意味を解読する段階。', '命令レジスタの内容を解析し、必要な演算、オペランド、制御信号を決める。', '加算命令かロード命令かを識別する', 4, 3, 10),
+    term('term-execute', 'cat-cpu', '実行', '命令に従って処理を行う段階。', 'ALUで演算したり、メモリを読み書きしたり、分岐先を決めたりする。', 'ADD命令でALUが加算する', 5, 3, 11),
+    term('term-instruction-cycle', 'cat-cpu', '命令サイクル', '命令を取り出して実行する一連の流れ。', '命令フェッチ、デコード、実行を中心に、CPUが命令を処理する周期を表す。', 'フェッチ→デコード→実行', 5, 3, 12),
+    term('term-clock', 'cat-cpu', 'クロック', 'CPU動作のタイミングを決める信号。', 'クロック周波数が高いほど単位時間あたりの周期数は多いが、性能はCPIや構成にも依存する。', '3GHzは1秒あたり約30億周期', 5, 2, 13),
+    term('term-cpi', 'cat-cpu', 'CPI', '1命令あたりに必要なクロック数。', 'Cycles Per Instructionの略。実行時間は命令数、CPI、クロック周期から考える。', '命令数×CPI×クロック周期', 5, 3, 14, ['Cycles Per Instruction']),
+    term('term-mips', 'cat-cpu', 'MIPS', '1秒間に実行できる百万命令数。', 'CPU性能指標の一つだが、命令の重さや命令セットの違いで単純比較できない場合がある。', '50MIPSは毎秒5000万命令', 4, 3, 15),
+    term('term-flops', 'cat-cpu', 'FLOPS', '1秒間の浮動小数点演算回数。', '科学技術計算やAI処理など、浮動小数点演算性能を比較する指標。', '1TFLOPSは毎秒1兆回の浮動小数点演算', 4, 3, 16),
+    term('term-pipeline', 'cat-cpu', 'パイプライン', '命令処理を段階に分けて並行実行する方式。', 'フェッチ、デコード、実行などを重ねて処理し、スループットを高める。ハザードへの理解も必要。', '工場の流れ作業のように複数命令を同時に進める', 5, 4, 17),
+    term('term-hazard', 'cat-cpu', 'ハザード', 'パイプライン実行を妨げる競合や依存。', 'データ依存、制御依存、構造的競合などにより、パイプラインを一時停止または分岐予測する必要が生じる。', '直前の命令結果を次命令がすぐ使う場合', 4, 4, 18),
+    term('term-risc', 'cat-cpu', 'RISC', '単純な命令を高速に実行する設計思想。', '命令長や実行サイクルをそろえ、パイプライン化しやすくする。CISCとの比較が頻出。', 'Reduced Instruction Set Computer', 4, 3, 19),
+    term('term-cisc', 'cat-cpu', 'CISC', '複雑な命令を持つ設計思想。', '一つの命令で多くの処理を行えるが、命令の複雑さにより実行時間がばらつく場合がある。', 'Complex Instruction Set Computer', 4, 3, 20),
+
+    term('term-memory-hierarchy', 'cat-memory', '記憶階層', '速度と容量の異なる記憶装置を階層化する考え方。', 'レジスタ、キャッシュメモリ、主記憶、補助記憶を組み合わせ、速度、容量、コストのバランスを取る。', 'CPUに近いほど高速で小容量、遠いほど低速で大容量', 5, 3, 1, ['メモリ階層']),
+    term('term-cache-memory', 'cat-memory', 'キャッシュメモリ', 'CPUと主記憶の間に置く高速メモリ。', 'よく使うデータや命令を保持し、平均アクセス時間を短縮する。局所性、ヒット率、ミスペナルティと関連する。', '直近に読んだ配列要素の近くを保持する', 5, 3, 2, ['キャッシュ']),
+    term('term-main-memory', 'cat-memory', '主記憶', 'CPUが直接アクセスする作業用メモリ。', '実行中のプログラムやデータを保持する。補助記憶より高速だが、一般に電源を切ると内容は失われる。', 'RAMにプログラムをロードして実行する', 5, 2, 3),
+    term('term-secondary-storage', 'cat-memory', '補助記憶', '長期保存に使う大容量の記憶装置。', 'SSDやHDDなどが代表例。主記憶より低速だが、大容量で不揮発性を持つ。', 'OSやファイルをSSDに保存する', 4, 2, 4),
+    term('term-locality', 'cat-memory', '局所性', '近くのデータや最近使ったデータが再利用されやすい性質。', '時間的局所性と空間的局所性があり、キャッシュメモリの効果を支える考え方。', 'ループで同じ変数や隣接配列要素を繰り返し使う', 5, 3, 5),
+    term('term-hit-rate', 'cat-memory', 'ヒット率', '必要なデータがキャッシュにある割合。', 'ヒット率が高いほど主記憶へのアクセスが減り、平均アクセス時間が短くなる。', '100回中90回キャッシュにあればヒット率90%', 5, 3, 6),
+    term('term-miss-rate', 'cat-memory', 'ミス率', '必要なデータがキャッシュにない割合。', 'ミス率は一般に 1 - ヒット率 で考える。ミス時は主記憶などから読み込むため遅くなる。', 'ヒット率90%ならミス率10%', 4, 3, 7),
+    term('term-miss-penalty', 'cat-memory', 'ミスペナルティ', 'キャッシュミス時に余分にかかる時間。', '主記憶からデータを取得してキャッシュへ入れるまでの遅延。平均アクセス時間の計算で使う。', 'ミス1回につき50ns余分にかかる', 4, 3, 8),
+    term('term-average-access-time', 'cat-memory', '平均アクセス時間', '記憶アクセスにかかる平均時間。', 'キャッシュのヒット時間、ミス率、ミスペナルティから計算し、メモリ性能を評価する。', 'ヒット時間 + ミス率×ミスペナルティ', 5, 4, 9),
+    term('term-virtual-memory', 'cat-memory', '仮想記憶', '主記憶より大きなアドレス空間を見せる仕組み。', '補助記憶を組み合わせ、プログラムには連続した大きなメモリがあるように見せる。ページングと関連する。', '使っていないページを補助記憶へ退避する', 5, 4, 10),
+    term('term-page', 'cat-memory', 'ページ', '仮想記憶で扱う固定長の管理単位。', '仮想アドレス空間と主記憶をページ単位で対応付ける。ページフォールトの前提になる。', '4KB単位でメモリを管理する', 4, 3, 11),
+    term('term-page-fault', 'cat-memory', 'ページフォールト', '必要なページが主記憶にない状態。', 'アクセスしたページが主記憶になければ、OSが補助記憶から読み込む。発生が多いと性能が大きく落ちる。', '退避中のページへアクセスして読み込みが発生する', 5, 4, 12)
+  ];
+
+  const relations = [
+    rel('term-base-conversion', 'term-binary', 'prerequisite'),
+    rel('term-base-conversion', 'term-octal', 'prerequisite'),
+    rel('term-base-conversion', 'term-decimal', 'prerequisite'),
+    rel('term-base-conversion', 'term-hexadecimal', 'prerequisite'),
+    rel('term-octal', 'term-binary', 'related'),
+    rel('term-hexadecimal', 'term-binary', 'related'),
+    rel('term-msb', 'term-binary', 'prerequisite'),
+    rel('term-lsb', 'term-binary', 'prerequisite'),
+    rel('term-signed-integer', 'term-binary', 'prerequisite'),
+    rel('term-signed-integer', 'term-msb', 'prerequisite'),
+    rel('term-sign-magnitude', 'term-signed-integer', 'prerequisite'),
+    rel('term-ones-complement', 'term-signed-integer', 'prerequisite'),
+    rel('term-twos-complement', 'term-signed-integer', 'prerequisite'),
+    rel('term-twos-complement', 'term-ones-complement', 'prerequisite'),
+    rel('term-twos-complement', 'term-msb', 'prerequisite'),
+    rel('term-sign-extension', 'term-twos-complement', 'prerequisite'),
+    rel('term-sign-extension', 'term-msb', 'prerequisite'),
+    rel('term-sign-magnitude', 'term-ones-complement', 'comparison'),
+    rel('term-ones-complement', 'term-twos-complement', 'comparison'),
+    rel('term-fixed-point', 'term-binary', 'prerequisite'),
+    rel('term-floating-point', 'term-binary', 'prerequisite'),
+    rel('term-floating-point', 'term-fixed-point', 'comparison'),
+    rel('term-exponent', 'term-floating-point', 'prerequisite'),
+    rel('term-mantissa', 'term-floating-point', 'prerequisite'),
+    rel('term-overflow', 'term-signed-integer', 'related'),
+    rel('term-overflow', 'term-floating-point', 'related'),
+    rel('term-underflow', 'term-floating-point', 'prerequisite'),
+    rel('term-underflow', 'term-overflow', 'comparison'),
+
+    rel('term-processor', 'term-cpu', 'related'),
+    rel('term-alu', 'term-cpu', 'prerequisite'),
+    rel('term-control-unit', 'term-cpu', 'prerequisite'),
+    rel('term-register', 'term-cpu', 'prerequisite'),
+    rel('term-program-counter', 'term-register', 'prerequisite'),
+    rel('term-instruction-register', 'term-register', 'prerequisite'),
+    rel('term-memory-address-register', 'term-register', 'prerequisite'),
+    rel('term-instruction-fetch', 'term-program-counter', 'prerequisite'),
+    rel('term-instruction-fetch', 'term-memory-address-register', 'prerequisite'),
+    rel('term-decode', 'term-instruction-register', 'prerequisite'),
+    rel('term-execute', 'term-decode', 'prerequisite'),
+    rel('term-execute', 'term-alu', 'related'),
+    rel('term-instruction-cycle', 'term-instruction-fetch', 'prerequisite'),
+    rel('term-instruction-cycle', 'term-decode', 'prerequisite'),
+    rel('term-instruction-cycle', 'term-execute', 'prerequisite'),
+    rel('term-cpi', 'term-clock', 'prerequisite'),
+    rel('term-cpi', 'term-instruction-cycle', 'prerequisite'),
+    rel('term-mips', 'term-cpi', 'prerequisite'),
+    rel('term-flops', 'term-floating-point', 'prerequisite'),
+    rel('term-flops', 'term-cpu', 'related'),
+    rel('term-pipeline', 'term-instruction-cycle', 'prerequisite'),
+    rel('term-hazard', 'term-pipeline', 'prerequisite'),
+    rel('term-risc', 'term-cpu', 'prerequisite'),
+    rel('term-cisc', 'term-cpu', 'prerequisite'),
+    rel('term-risc', 'term-cisc', 'comparison'),
+
+    rel('term-memory-hierarchy', 'term-register', 'included'),
+    rel('term-memory-hierarchy', 'term-cache-memory', 'included'),
+    rel('term-memory-hierarchy', 'term-main-memory', 'included'),
+    rel('term-memory-hierarchy', 'term-secondary-storage', 'included'),
+    rel('term-cache-memory', 'term-memory-hierarchy', 'prerequisite'),
+    rel('term-cache-memory', 'term-locality', 'prerequisite'),
+    rel('term-hit-rate', 'term-cache-memory', 'prerequisite'),
+    rel('term-miss-rate', 'term-hit-rate', 'prerequisite'),
+    rel('term-miss-penalty', 'term-cache-memory', 'prerequisite'),
+    rel('term-average-access-time', 'term-hit-rate', 'prerequisite'),
+    rel('term-average-access-time', 'term-miss-rate', 'prerequisite'),
+    rel('term-average-access-time', 'term-miss-penalty', 'prerequisite'),
+    rel('term-virtual-memory', 'term-main-memory', 'prerequisite'),
+    rel('term-virtual-memory', 'term-secondary-storage', 'prerequisite'),
+    rel('term-page', 'term-virtual-memory', 'prerequisite'),
+    rel('term-page-fault', 'term-page', 'prerequisite'),
+    rel('term-page-fault', 'term-virtual-memory', 'prerequisite')
+  ];
+
+  return {
+    version: 1,
+    generatedAt: now,
+    settings: {
+      masteryWeakThreshold: 40,
+      masteryMasteredThreshold: 80,
+      masteredAttempts: 3,
+      masteredConsecutiveCorrect: 2,
+      reviewIntervals: [1, 3, 7, 14, 30]
+    },
+    subjects: [
+      {id: 'subj-tech', name: 'テクノロジ系', description: '基礎理論、コンピュータシステム、技術要素を扱う分野。', displayOrder: 1, createdAt: now, updatedAt: now},
+      {id: 'subj-management', name: 'マネジメント系', description: '開発管理、プロジェクト、サービス、監査を扱う分野。', displayOrder: 2, createdAt: now, updatedAt: now},
+      {id: 'subj-strategy', name: 'ストラテジ系', description: '企業活動、法務、経営戦略、システム戦略を扱う分野。', displayOrder: 3, createdAt: now, updatedAt: now}
+    ],
+    categories: [
+      {id: 'cat-computer-system', subjectId: 'subj-tech', parentCategoryId: null, name: 'コンピュータシステム', description: 'コンピュータの構成と性能を理解する分野。', displayOrder: 1, createdAt: now, updatedAt: now},
+      {id: 'cat-computer-elements', subjectId: 'subj-tech', parentCategoryId: 'cat-computer-system', name: 'コンピュータ構成要素', description: 'CPU、メモリ、入出力装置などを扱う。', displayOrder: 1, createdAt: now, updatedAt: now},
+      {id: 'cat-number', subjectId: 'subj-tech', parentCategoryId: 'cat-computer-elements', name: '数値表現', description: '基数、ビット、整数、小数の表し方。', displayOrder: 1, createdAt: now, updatedAt: now},
+      {id: 'cat-cpu', subjectId: 'subj-tech', parentCategoryId: 'cat-computer-elements', name: 'CPU', description: '命令実行、性能指標、命令セット。', displayOrder: 2, createdAt: now, updatedAt: now},
+      {id: 'cat-memory', subjectId: 'subj-tech', parentCategoryId: 'cat-computer-elements', name: 'メモリ', description: '記憶階層、キャッシュ、仮想記憶。', displayOrder: 3, createdAt: now, updatedAt: now}
+    ],
+    terms,
+    relations,
+    questionTerms: [
+      qt('sa-001', 'term-binary', 'primary', 1),
+      qt('sa-001', 'term-base-conversion', 'related', 0.7),
+      qt('sa-001', 'term-decimal', 'related', 0.5)
+    ]
+  };
+})();

@@ -3,15 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#10141d" media="(prefers-color-scheme: dark)">
   <meta name="description" content="基本情報技術者試験の用語学習・問題演習・復習管理ができる無料PWA">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./icons/icon-192.png">
-  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
   <link rel="stylesheet" href="./assets/styles.css">
   <title>FE Learning OS</title>
 </head>
 <body>
+  <a class="skip-link" href="#app">本文へ移動</a>
   <header class="app-header">
     <div>
       <p class="eyebrow">基本情報技術者試験</p>
@@ -27,14 +29,35 @@
         <span id="todayLabel" class="subtle"></span>
       </div>
 
-      <div class="hero-card">
-        <div>
-          <span class="hero-label">今日の問題</span>
-          <strong id="dailyProgressText">0 / 10</strong>
-          <div class="progress-track"><span id="dailyProgressBar"></span></div>
+      <div class="home-hero">
+        <div class="home-hero-main">
+          <p class="eyebrow">Study plan</p>
+          <strong id="homePlanTitle" class="home-hero-title">今日の1セットを始める</strong>
+          <p id="homePlanText" class="home-hero-copy">10問解いて、苦手語を復習リストへ回しましょう。</p>
+          <div class="home-progress-row">
+            <div>
+              <span class="hero-label">今日の問題</span>
+              <strong id="dailyProgressText">0 / 10</strong>
+            </div>
+            <span id="examCountdownText" class="status-pill">試験日未設定</span>
+          </div>
+          <div class="progress-track hero-progress"><span id="dailyProgressBar"></span></div>
+          <div class="home-hero-actions">
+            <button id="quickStartButton" class="primary large" type="button">10問スタート</button>
+            <button id="homeReviewButton" class="secondary large" type="button">復習を見る</button>
+          </div>
         </div>
-        <button id="quickStartButton" class="primary large" type="button">10問スタート</button>
+        <div class="readiness-ring" aria-label="学習準備度">
+          <span id="homeReadinessRing">0%</span>
+          <small>準備度</small>
+        </div>
       </div>
+
+      <section class="panel action-plan">
+        <div class="panel-title-row"><h3>今日やること</h3><span id="todayTaskSummary" class="subtle"></span></div>
+        <div id="todayTasks" class="task-list" aria-live="polite"></div>
+        <button id="recommendedQuizButton" class="primary full" type="button">おすすめ演習を始める</button>
+      </section>
 
       <div class="stats-grid">
         <article class="stat-card"><span>連続学習</span><strong id="streakValue">0日</strong><small>現在のストリーク</small></article>
@@ -66,7 +89,7 @@
     </section>
 
     <section id="view-study" class="view" aria-labelledby="studyTitle">
-      <div class="section-heading"><div><p class="eyebrow">Glossary</p><h2 id="studyTitle">用語学習</h2></div><strong id="termCountLabel" class="subtle"></strong></div>
+      <div class="section-heading"><div><p class="eyebrow">Glossary</p><h2 id="studyTitle">用語学習</h2></div><strong id="termCountLabel" class="subtle" aria-live="polite"></strong></div>
       <div class="panel controls-panel">
         <label class="search-box"><span aria-hidden="true">⌕</span><input id="termSearch" type="search" placeholder="用語・解説・関連語を検索" autocomplete="off"></label>
         <div class="filter-row">
@@ -81,13 +104,14 @@
     </section>
 
     <section id="view-quiz" class="view" aria-labelledby="quizTitle">
-      <div class="section-heading"><div><p class="eyebrow">Practice</p><h2 id="quizTitle">問題演習</h2></div><span id="quizSessionStatus" class="subtle"></span></div>
+      <div class="section-heading"><div><p class="eyebrow">Practice</p><h2 id="quizTitle">問題演習</h2></div><span id="quizSessionStatus" class="subtle" aria-live="polite"></span></div>
       <div id="quizSetup" class="panel">
         <div class="form-grid">
-          <label>出題モード<select id="quizMode"><option value="random">ランダム</option><option value="weak">苦手優先</option><option value="due">復習期限</option><option value="unlearned">未学習優先</option></select></label>
+          <label>演習タイプ<select id="quizSource"><option value="terms">用語4択</option><option value="subjectA">科目A</option></select></label>
+          <label>出題モード<select id="quizMode"><option value="recommended">おすすめ</option><option value="random">ランダム</option><option value="weak">苦手優先</option><option value="due">復習期限</option><option value="unlearned">未学習優先</option></select></label>
           <label>分野<select id="quizSystem"><option value="">全分野</option></select></label>
           <label>問題数<select id="quizLength"><option value="5">5問</option><option value="10" selected>10問</option><option value="20">20問</option></select></label>
-          <label>問題形式<select id="quizType"><option value="mixed">ミックス</option><option value="description">説明 → 用語</option><option value="term">用語 → 説明</option></select></label>
+          <label>問題形式<select id="quizType"><option value="mixed">ミックス</option><option value="description">説明 → 用語</option><option value="term">用語 → 説明</option><option value="mock">模試形式</option></select></label>
         </div>
         <button id="startQuizButton" class="primary full" type="button">演習を開始</button>
       </div>
@@ -95,13 +119,17 @@
     </section>
 
     <section id="view-review" class="view" aria-labelledby="reviewTitle">
-      <div class="section-heading"><div><p class="eyebrow">Spaced repetition</p><h2 id="reviewTitle">復習</h2></div><strong id="reviewCountLabel" class="subtle"></strong></div>
-      <div class="hero-card compact">
-        <div><span class="hero-label">今日の復習期限</span><strong id="reviewHeroCount">0語</strong></div>
+      <div class="section-heading"><div><p class="eyebrow">Spaced repetition</p><h2 id="reviewTitle">復習</h2></div><strong id="reviewCountLabel" class="subtle" aria-live="polite"></strong></div>
+      <div class="hero-card compact review-hero">
+        <div><span class="hero-label">今日の復習</span><strong id="reviewHeroCount">0語</strong></div>
+        <div class="review-hero-meta">
+          <div><span class="hero-label">次回復習</span><strong id="nextReviewDate">—</strong></div>
+          <div><span class="hero-label">最優先</span><strong id="reviewTopPriority">—</strong></div>
+        </div>
         <button id="startReviewButton" class="primary" type="button">復習開始</button>
       </div>
       <div class="segmented" role="tablist" aria-label="復習対象の切替">
-        <button class="active" data-review-filter="due" type="button">期限</button><button data-review-filter="wrong" type="button">誤答</button><button data-review-filter="bookmark" type="button">保存</button>
+        <button class="active" data-review-filter="due" type="button" role="tab" aria-selected="true">期限</button><button data-review-filter="wrong" type="button" role="tab" aria-selected="false">誤答</button><button data-review-filter="bookmark" type="button" role="tab" aria-selected="false">保存</button>
       </div>
       <div id="reviewList" class="card-list"></div>
     </section>
@@ -114,8 +142,69 @@
         <article class="stat-card"><span>学習日数</span><strong id="studyDaysValue">0</strong><small>1問以上解答</small></article>
         <article class="stat-card"><span>最高連続</span><strong id="bestStreakValue">0日</strong><small>過去最高</small></article>
       </div>
+      <section class="panel analytics-advice">
+        <div class="panel-title-row"><h3>学習準備度</h3><strong id="progressReadinessValue">0%</strong></div>
+        <div class="progress-track tall"><span id="progressReadinessBar"></span></div>
+        <p id="studyAdviceText" class="help"></p>
+      </section>
+      <section class="panel"><h3>学習状態</h3><div id="learningStatusSummary" class="learning-status"></div></section>
+      <section class="panel"><h3>最近14日間の学習量</h3><div id="progressActivityChart" class="activity-chart" aria-label="最近14日間の解答数"></div><p id="progressActivitySummary" class="help"></p></section>
+      <section class="panel"><h3>苦手分野</h3><div id="weakAreaSummary" class="stack-list"></div></section>
       <section class="panel"><h3>分野別成績</h3><div id="categoryAnalytics" class="analytics-list"></div></section>
       <section class="panel"><h3>間違えやすい用語</h3><div id="mistakeRanking" class="stack-list"></div></section>
+    </section>
+
+    <section id="view-map" class="view" aria-labelledby="mapTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">Knowledge map</p><h2 id="mapTitle">知識マップ</h2></div>
+        <strong id="knowledgeMapCount" class="subtle" aria-live="polite"></strong>
+      </div>
+
+      <div class="map-summary-grid" aria-label="知識マップの概要">
+        <article class="stat-card"><span>マップ習熟度</span><strong id="mapMasteryValue">0%</strong><small>重要度を加味した平均</small></article>
+        <article class="stat-card"><span>要復習</span><strong id="mapReviewValue">0</strong><small>期限または忘れかけ</small></article>
+        <article class="stat-card"><span>苦手</span><strong id="mapWeakValue">0</strong><small>誤答・低習熟度</small></article>
+        <article class="stat-card"><span>習得済み</span><strong id="mapMasteredValue">0</strong><small>安定して正解</small></article>
+      </div>
+
+      <section class="panel map-recommendation">
+        <div class="panel-title-row"><h3>次に学ぶ</h3><button id="focusRecommendationButton" class="text-button" type="button">表示</button></div>
+        <div id="mapRecommendation" class="map-recommendation-body"></div>
+      </section>
+
+      <div class="panel controls-panel map-controls">
+        <label class="search-box"><span aria-hidden="true">⌕</span><input id="knowledgeSearch" type="search" placeholder="用語・説明・関連語を検索" autocomplete="off"></label>
+        <div class="filter-row">
+          <select id="knowledgeStatusFilter" aria-label="習熟状態で絞り込み">
+            <option value="">すべての状態</option>
+            <option value="locked">前提未達</option>
+            <option value="unlearned">未学習</option>
+            <option value="learning">学習中</option>
+            <option value="review">要復習</option>
+            <option value="weak">苦手</option>
+            <option value="mastered">習得済み</option>
+          </select>
+          <button id="knowledgeResetViewButton" class="secondary" type="button">絞り込み解除</button>
+        </div>
+      </div>
+
+      <div class="map-layout">
+        <section class="panel map-tree-panel">
+          <div class="map-legend" aria-label="状態の凡例">
+            <span class="map-state state-locked"><b>LOCK</b>前提未達</span>
+            <span class="map-state state-unlearned"><b>未</b>未学習</span>
+            <span class="map-state state-learning"><b>学</b>学習中</span>
+            <span class="map-state state-review"><b>復</b>要復習</span>
+            <span class="map-state state-weak"><b>苦</b>苦手</span>
+            <span class="map-state state-mastered"><b>済</b>習得済み</span>
+          </div>
+          <div id="knowledgeMapTree" class="knowledge-tree" role="tree" aria-label="分野、カテゴリ、用語の知識マップ"></div>
+        </section>
+
+        <aside id="knowledgeDetailPanel" class="panel map-detail-panel" aria-live="polite">
+          <p class="empty">用語ノードを選択すると詳細を表示します。</p>
+        </aside>
+      </div>
     </section>
 
     <section id="view-settings" class="view" aria-labelledby="settingsTitle">
@@ -132,26 +221,32 @@
       </section>
       <section class="panel">
         <h3>無料AI連携</h3><p class="help">API料金を使わず、選択中の用語をChatGPTへ質問する文章をコピーできます。</p>
-        <button id="copyGeneralPromptButton" class="secondary full" type="button">弱点分析用プロンプトをコピー</button>
+        <button id="copyGeneralPromptButton" class="secondary full" type="button">今日の弱点を整理する質問文をコピー</button>
       </section>
       <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.0.0</p><p>オフライン対応・GitHub Pages対応</p></section>
     </section>
   </main>
 
   <nav class="bottom-nav" aria-label="メインメニュー">
-    <button class="active" data-nav="home" type="button"><span>⌂</span>ホーム</button>
-    <button data-nav="study" type="button"><span>▤</span>用語</button>
-    <button data-nav="quiz" type="button"><span>?</span>問題</button>
-    <button data-nav="review" type="button"><span>↻</span>復習</button>
-    <button data-nav="progress" type="button"><span>▥</span>分析</button>
-    <button data-nav="settings" type="button"><span>⚙</span>設定</button>
+    <button class="active" data-nav="home" type="button" aria-label="ホーム" aria-current="page"><span aria-hidden="true">⌂</span>ホーム</button>
+    <button data-nav="study" type="button" aria-label="用語"><span aria-hidden="true">▤</span>用語</button>
+    <button data-nav="quiz" type="button" aria-label="問題"><span aria-hidden="true">?</span>問題</button>
+    <button data-nav="review" type="button" aria-label="復習"><span aria-hidden="true">↻</span>復習</button>
+    <button data-nav="map" type="button" aria-label="知識マップ"><span aria-hidden="true">◇</span>マップ</button>
+    <button data-nav="progress" type="button" aria-label="分析"><span aria-hidden="true">▥</span>分析</button>
+    <button data-nav="settings" type="button" aria-label="設定"><span aria-hidden="true">⚙</span>設定</button>
   </nav>
 
   <dialog id="termDialog"><div id="termDialogContent" class="dialog-body"></div></dialog>
   <dialog id="resultDialog"><div id="resultDialogContent" class="dialog-body"></div></dialog>
+  <div id="updateBanner" class="update-banner hidden" role="status" aria-live="polite"><span>新しい版を利用できます</span><button id="reloadUpdateButton" class="primary" type="button">更新</button></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="./assets/terms-data.js"></script>
+  <script src="./assets/syllabus-terms.js"></script>
+  <script src="./assets/subject-a-data.js"></script>
+  <script src="./assets/knowledge-map-data.js"></script>
+  <script src="./assets/knowledge-map.js"></script>
   <script src="./assets/app.js"></script>
 </body>
 </html>

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Knowledge Map Tests</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.5; }
+    li.pass { color: #166534; }
+    li.fail { color: #991b1b; }
+  </style>
+</head>
+<body>
+  <h1>Knowledge Map Tests</h1>
+  <ol id="results"></ol>
+
+  <script src="../assets/knowledge-map-data.js"></script>
+  <script src="../assets/knowledge-map.js"></script>
+  <script>
+    const results = document.getElementById('results');
+    const progress = {};
+    const attempts = {};
+    const appTerms = window.FE_KNOWLEDGE_MAP.terms.map((term, index) => ({
+      id: `app-${index + 1}`,
+      用語: term.name,
+      系: 'テクノロジ系',
+      中分類: 'コンピュータ構成要素',
+      基本解説: term.shortDescription,
+      関連語: ''
+    }));
+    const service = window.FEKnowledgeMap.createKnowledgeMapService(window.FE_KNOWLEDGE_MAP, {
+      terms: appTerms,
+      readTermState: id => progress[id] || {},
+      attemptsFor: id => attempts[id] || [],
+      reviewDate: state => state.due || state.nextReview || null,
+      daysSince: date => date ? 1 : 999
+    });
+
+    function addResult(name, pass, details = '') {
+      const item = document.createElement('li');
+      item.className = pass ? 'pass' : 'fail';
+      item.textContent = `${pass ? 'PASS' : 'FAIL'}: ${name}${details ? ` - ${details}` : ''}`;
+      results.appendChild(item);
+    }
+
+    function test(name, fn) {
+      try {
+        fn();
+        addResult(name, true);
+      } catch (error) {
+        addResult(name, false, error.message);
+      }
+    }
+
+    function assert(condition, message) {
+      if (!condition) throw new Error(message);
+    }
+
+    test('初期データに重複関係と循環がない', () => {
+      const validation = service.validateData();
+      assert(validation.ok, validation.errors.join(', '));
+    });
+
+    test('prerequisite循環を検出できる', () => {
+      const cycle = window.FEKnowledgeMap.detectPrerequisiteCycle([
+        ...window.FE_KNOWLEDGE_MAP.relations,
+        {sourceTermId: 'term-binary', targetTermId: 'term-twos-complement', relationType: 'prerequisite'}
+      ]);
+      assert(cycle.length > 0, 'cycle should be detected');
+    });
+
+    test('未学習で前提未達の用語はlockedになる', () => {
+      assert(service.progressForTerm('term-twos-complement').status === 'locked', '2の補数 should be locked before prerequisites');
+    });
+
+    test('習熟済み条件を満たすとmasteredになる', () => {
+      const binary = service.getTerm('term-binary');
+      progress[binary.appTermId] = {mastery: 5, correct: 3, wrong: 0, streak: 3, last: '2026-07-31'};
+      attempts[binary.appTermId] = [{correct: true}, {correct: true}, {correct: true}];
+      assert(service.progressForTerm('term-binary').status === 'mastered', '2進数 should be mastered');
+    });
+
+    test('誤答が続くとweakになる', () => {
+      const twos = service.getTerm('term-twos-complement');
+      progress[twos.appTermId] = {mastery: 1, correct: 0, wrong: 2, streak: 0, last: '2026-07-31'};
+      attempts[twos.appTermId] = [{correct: false}, {correct: false}];
+      assert(service.progressForTerm('term-twos-complement').status === 'weak', '2の補数 should be weak');
+    });
+
+    test('カテゴリ進度は0から100で計算される', () => {
+      const progressValue = service.categoryProgress('cat-number').masteryScore;
+      assert(progressValue >= 0 && progressValue <= 100, 'category progress out of range');
+    });
+
+    test('次に学ぶ推薦に理由が付く', () => {
+      const recommendation = service.recommendNext(1)[0];
+      assert(recommendation && recommendation.term && recommendation.reason, 'recommendation should have a term and reason');
+    });
+
+    test('QuestionTermから問題と用語の関連を取得できる', () => {
+      const links = service.getQuestionTermLinks('sa-001');
+      assert(links.length === 3, `expected 3 links, got ${links.length}`);
+      assert(links.some(link => link.role === 'primary' && link.term.name === '2進数'), 'primary 2進数 link missing');
+    });
+
+    test('重み付き正誤が習熟度と状態判定に反映される', () => {
+      const baseConversion = service.getTerm('term-base-conversion');
+      progress[baseConversion.appTermId] = {mastery: 1, correct: 0, wrong: 0, knowledgeCorrect: 0, knowledgeWrong: 1.5, streak: 0, consecutiveIncorrect: 2, last: '2026-07-31'};
+      assert(service.progressForTerm('term-base-conversion').status === 'weak', 'weighted wrong state should be weak');
+      assert(service.weakReasons('term-base-conversion').length > 0, 'weak reasons should exist');
+    });
+  </script>
+</body>
+</html>
