@@ -132,6 +132,11 @@
         <p id="studyAdviceText" class="help"></p>
       </section>
       <section class="panel"><h3>学習状態</h3><div id="learningStatusSummary" class="learning-status"></div></section>
+      <section class="panel">
+        <h3>記述とテストの進捗</h3>
+        <div id="writingTestSummary" class="learning-status"></div>
+        <div id="writingSubjectSummary" class="analytics-list"></div>
+      </section>
       <section class="panel"><h3>最近14日間の学習量</h3><div id="progressActivityChart" class="activity-chart" aria-label="最近14日間の解答数"></div><p id="progressActivitySummary" class="help"></p></section>
       <section class="panel"><h3>苦手分野</h3><div id="weakAreaSummary" class="stack-list"></div></section>
       <section class="panel"><h3>分野別成績</h3><div id="categoryAnalytics" class="analytics-list"></div></section>
@@ -145,7 +150,8 @@
       </div>
 
       <div class="map-summary-grid" aria-label="知識マップの概要">
-        <article class="stat-card"><span>マップ習熟度</span><strong id="mapMasteryValue">0%</strong><small>重要度を加味した平均</small></article>
+        <article class="stat-card"><span>テスト習熟度</span><strong id="mapMasteryValue">0%</strong><small>重要度を加味した平均</small></article>
+        <article class="stat-card"><span>記述済み</span><strong id="mapWritingValue">0%</strong><small>10文字以上の説明</small></article>
         <article class="stat-card"><span>要復習</span><strong id="mapReviewValue">0</strong><small>期限または忘れかけ</small></article>
         <article class="stat-card"><span>苦手</span><strong id="mapWeakValue">0</strong><small>誤答・低習熟度</small></article>
         <article class="stat-card"><span>習得済み</span><strong id="mapMasteredValue">0</strong><small>安定して正解</small></article>
@@ -173,6 +179,16 @@
             <option value="review">要復習</option>
             <option value="weak">苦手</option>
             <option value="mastered">習得済み</option>
+          </select>
+          <select id="knowledgeWritingFilter" aria-label="記述状態で絞り込み">
+            <option value="">すべての記述</option>
+            <option value="empty">未記入</option>
+            <option value="short">下書き</option>
+            <option value="written">記入済み</option>
+            <option value="pending">確認待ち</option>
+            <option value="confirmed">確認済み</option>
+            <option value="revise">要修正</option>
+            <option value="insufficient">理解不足</option>
           </select>
           <button id="knowledgeExpandAllButton" class="secondary" type="button">大分類を開く</button>
           <button id="knowledgeCollapseAllButton" class="secondary" type="button">閉じる</button>

@@ -898,6 +898,10 @@ textarea {
   font-size: 12px;
 }
 
+.analytics-row .progress-split {
+  grid-column: 2 / -1;
+}
+
 .analytics-advice {
   display: grid;
   gap: 10px;
@@ -940,9 +944,48 @@ textarea {
 
 .map-summary-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.progress-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.progress-split > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel) 76%, transparent);
+  padding: 9px;
+}
+
+.progress-split span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.progress-split small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.progress-split.compact {
+  gap: 7px;
+}
+
+.progress-split.compact > div {
+  padding: 7px;
 }
 
 .map-mode-tabs {
@@ -1824,7 +1867,7 @@ dialog::backdrop {
   }
 
   .map-summary-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
 
   .overview-category-grid {
