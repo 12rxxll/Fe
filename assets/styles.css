@@ -318,6 +318,21 @@ small {
   padding: 17px;
 }
 
+.review-hero {
+  flex-wrap: wrap;
+}
+
+.review-hero-meta {
+  display: flex;
+  flex: 1 1 220px;
+  gap: 12px;
+  justify-content: center;
+}
+
+.review-hero-meta > div {
+  min-width: 86px;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -527,6 +542,42 @@ small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-card {
+  align-items: flex-start;
+  overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.review-card .badges {
+  display: flex;
+  margin-top: 7px;
+}
+
+.review-card .badge {
+  display: inline-flex;
+}
+
+.stack-item .review-priority {
+  display: grid;
+  place-items: center;
+  flex: 0 0 58px;
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--panel-2);
+}
+
+.review-priority b {
+  line-height: 1;
+}
+
+.review-priority small {
+  overflow: visible;
+  font-size: 10px;
   white-space: nowrap;
 }
 
@@ -1156,6 +1207,29 @@ dialog::backdrop {
     align-items: flex-start;
     flex-direction: column;
     gap: 3px;
+  }
+
+  .review-hero {
+    align-items: stretch;
+  }
+
+  .review-hero > div:first-child,
+  .review-hero > button {
+    flex: 1 1 100%;
+  }
+
+  .review-hero-meta {
+    order: 2;
+    justify-content: flex-start;
+  }
+
+  .review-hero > button {
+    order: 3;
+  }
+
+  .stack-item .review-priority {
+    flex-basis: 50px;
+    min-height: 54px;
   }
 
   .home-hero-title {

@@ -119,8 +119,12 @@
 
     <section id="view-review" class="view" aria-labelledby="reviewTitle">
       <div class="section-heading"><div><p class="eyebrow">Spaced repetition</p><h2 id="reviewTitle">復習</h2></div><strong id="reviewCountLabel" class="subtle" aria-live="polite"></strong></div>
-      <div class="hero-card compact">
-        <div><span class="hero-label">今日の復習期限</span><strong id="reviewHeroCount">0語</strong></div>
+      <div class="hero-card compact review-hero">
+        <div><span class="hero-label">今日の復習</span><strong id="reviewHeroCount">0語</strong></div>
+        <div class="review-hero-meta">
+          <div><span class="hero-label">次回復習</span><strong id="nextReviewDate">—</strong></div>
+          <div><span class="hero-label">最優先</span><strong id="reviewTopPriority">—</strong></div>
+        </div>
         <button id="startReviewButton" class="primary" type="button">復習開始</button>
       </div>
       <div class="segmented" role="tablist" aria-label="復習対象の切替">
