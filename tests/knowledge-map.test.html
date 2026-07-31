@@ -109,6 +109,28 @@
       assert(service.progressForTerm('term-base-conversion').status === 'weak', 'weighted wrong state should be weak');
       assert(service.weakReasons('term-base-conversion').length > 0, 'weak reasons should exist');
     });
+
+    test('既存用語データから知識マップノードを補完できる', () => {
+      const expanded = window.FEKnowledgeMap.createKnowledgeMapService(window.FE_KNOWLEDGE_MAP, {
+        terms: appTerms.concat([{
+          id: 'extra-term',
+          用語: '追加用語',
+          系: 'マネジメント系',
+          大分類: 'プロジェクトマネジメント',
+          中分類: '計画',
+          小分類: 'スコープ',
+          基本解説: '追加された用語の説明。',
+          関連語: '2進数'
+        }]),
+        readTermState: id => progress[id] || {},
+        attemptsFor: id => attempts[id] || []
+      });
+      const added = expanded.getTermsForAppTermId('extra-term')[0];
+      assert(expanded.mapSummary().termCount === service.mapSummary().termCount + 1, 'expanded map should include extra app term');
+      assert(added && added.name === '追加用語', 'extra term should be resolvable');
+      assert(expanded.getCategoryPath(added.categoryId).some(category => category.name === 'プロジェクトマネジメント'), 'category path should be generated');
+      assert(expanded.getConnectedTerms(added.id).some(term => term.name === '2進数'), 'related relation should be generated');
+    });
   </script>
 </body>
 </html>

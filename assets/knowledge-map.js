@@ -44,9 +44,181 @@ window.FEKnowledgeMap = (() => {
       return true;
     });
   };
+  const compactText = (text, limit = 96) => {
+    const value = String(text || '').trim();
+    if (!value) return '';
+    const end = value.search(/[。．.!?]/);
+    const sentence = end >= 0 ? value.slice(0, end + 1) : value;
+    return sentence.length > limit ? `${sentence.slice(0, limit - 1)}...` : sentence;
+  };
+  const splitRelated = value => String(value || '').split(/[\/、,，]/).map(item => item.trim()).filter(Boolean);
+
+  function hashString(value) {
+    const text = String(value || '');
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+    return Math.abs(hash).toString(36);
+  }
+
+  function stableId(prefix, value) {
+    const ascii = String(value || '').normalize('NFKC').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return `${prefix}-${ascii || hashString(value)}`;
+  }
+
+  function uniqueId(base, used) {
+    let id = base;
+    let index = 2;
+    while (used.has(id)) id = `${base}-${index++}`;
+    used.add(id);
+    return id;
+  }
+
+  function buildCompleteMapData(data, appTerms = []) {
+    const now = (data && data.generatedAt) || new Date().toISOString();
+    const subjects = safeArray(data && data.subjects).map(subject => Object.assign({}, subject));
+    const categories = safeArray(data && data.categories).map(category => Object.assign({}, category));
+    const terms = safeArray(data && data.terms).map(term => Object.assign({}, term));
+    const relations = safeArray(data && data.relations).map(relation => Object.assign({}, relation));
+    const questionTerms = safeArray(data && data.questionTerms).map(link => Object.assign({}, link));
+    const settings = Object.assign({}, data && data.settings);
+    const usedSubjectIds = new Set(subjects.map(subject => subject.id));
+    const usedCategoryIds = new Set(categories.map(category => category.id));
+    const usedTermIds = new Set(terms.map(term => term.id));
+    const usedRelationIds = new Set(relations.map(relation => relation.id));
+    const relationKeys = new Set(relations.map(relation => `${relation.sourceTermId}|${relation.targetTermId}|${relation.relationType}`));
+    const subjectByName = new Map();
+    const categoryByKey = new Map();
+    const termPrimaryByName = new Map();
+    const termByName = new Map();
+    const appTermByName = new Map();
+
+    subjects.forEach(subject => subjectByName.set(normalize(subject.name), subject));
+    categories.forEach(category => categoryByKey.set(`${category.subjectId}|${category.parentCategoryId || ''}|${normalize(category.name)}`, category));
+    terms.forEach(term => {
+      const primaryKey = normalize(term.name);
+      if (primaryKey && !termPrimaryByName.has(primaryKey)) termPrimaryByName.set(primaryKey, term);
+      [term.name, ...safeArray(term.aliases)].forEach(name => {
+        const key = normalize(name);
+        if (key && !termByName.has(key)) termByName.set(key, term);
+      });
+    });
+    safeArray(appTerms).forEach(term => {
+      const key = normalize(term && term['用語']);
+      if (key && !appTermByName.has(key)) appTermByName.set(key, term);
+    });
+
+    function ensureSubject(name) {
+      const subjectName = String(name || '未分類').trim();
+      const key = normalize(subjectName);
+      if (subjectByName.has(key)) return subjectByName.get(key);
+      const subject = {
+        id: uniqueId(stableId('subj', subjectName), usedSubjectIds),
+        name: subjectName,
+        description: `${subjectName}の学習分野。`,
+        displayOrder: subjects.length + 1,
+        createdAt: now,
+        updatedAt: now
+      };
+      subjects.push(subject);
+      subjectByName.set(key, subject);
+      return subject;
+    }
+
+    function ensureCategory(subjectId, parentCategoryId, name, description = '') {
+      const categoryName = String(name || '未分類').trim();
+      const key = `${subjectId}|${parentCategoryId || ''}|${normalize(categoryName)}`;
+      if (categoryByKey.has(key)) return categoryByKey.get(key);
+      const category = {
+        id: uniqueId(stableId('cat', `${subjectId}-${parentCategoryId || 'root'}-${categoryName}`), usedCategoryIds),
+        subjectId,
+        parentCategoryId: parentCategoryId || null,
+        name: categoryName,
+        description: description || `${categoryName}に含まれる用語。`,
+        displayOrder: categories.length + 1,
+        createdAt: now,
+        updatedAt: now
+      };
+      categories.push(category);
+      categoryByKey.set(key, category);
+      return category;
+    }
+
+    function inferImportance(term) {
+      const source = String(term['出典'] || '');
+      if (!source) return 4;
+      if (source.includes('知識マップ')) return 5;
+      if (source.includes('シラバス')) return 3;
+      return 4;
+    }
+
+    function inferDifficulty(term) {
+      const text = `${term['用語'] || ''} ${term['基本解説'] || ''} ${term['試験での着眼点'] || ''}`;
+      if (/[計算|公式|アルゴリズム|仮想|暗号|正規化|複雑|性能|制御]/.test(text)) return 4;
+      if (String(term['基本解説'] || '').length > 80) return 3;
+      return 2;
+    }
+
+    safeArray(appTerms).forEach((appTerm, index) => {
+      const name = String(appTerm && appTerm['用語'] || '').trim();
+      const key = normalize(name);
+      if (!key || termPrimaryByName.has(key)) return;
+
+      const subject = ensureSubject(appTerm['系']);
+      const majorName = appTerm['大分類'] || subject.name;
+      const middleName = appTerm['中分類'] || majorName;
+      const minorName = appTerm['小分類'] || middleName;
+      const major = ensureCategory(subject.id, null, majorName, `${subject.name} / ${majorName}`);
+      const middle = normalize(middleName) === normalize(major.name) ? major : ensureCategory(subject.id, major.id, middleName, `${major.name} / ${middleName}`);
+      const leaf = normalize(minorName) === normalize(middle.name) ? middle : ensureCategory(subject.id, middle.id, minorName, `${middle.name} / ${minorName}`);
+      const aliases = [appTerm['英語']].filter(Boolean);
+      const term = {
+        id: uniqueId(stableId('auto', appTerm.id || name), usedTermIds),
+        categoryId: leaf.id,
+        name,
+        reading: '',
+        shortDescription: compactText(appTerm['基本解説'] || appTerm['試験での着眼点'] || `${name}に関する用語。`, 92),
+        detailedDescription: appTerm['基本解説'] || appTerm['試験での着眼点'] || `${name}に関するFE学習用語。`,
+        example: appTerm['試験での着眼点'] || appTerm['関連語'] || `${name}の定義、目的、使われる場面を確認する。`,
+        importance: inferImportance(appTerm),
+        difficulty: inferDifficulty(appTerm),
+        displayOrder: index + 1,
+        aliases,
+        source: appTerm['出典'] || '用語データ',
+        createdAt: now,
+        updatedAt: now
+      };
+      terms.push(term);
+      termPrimaryByName.set(key, term);
+      [term.name, ...aliases].forEach(alias => {
+        const aliasKey = normalize(alias);
+        if (aliasKey && !termByName.has(aliasKey)) termByName.set(aliasKey, term);
+      });
+    });
+
+    terms.forEach(term => {
+      const appTerm = appTermByName.get(normalize(term.name));
+      if (!appTerm) return;
+      splitRelated(appTerm['関連語']).slice(0, 8).forEach(name => {
+        const target = termByName.get(normalize(name));
+        if (!target || target.id === term.id) return;
+        const key = `${term.id}|${target.id}|related`;
+        if (relationKeys.has(key)) return;
+        relationKeys.add(key);
+        relations.push({
+          id: uniqueId(stableId('rel', `${term.id}-related-${target.id}`), usedRelationIds),
+          sourceTermId: term.id,
+          targetTermId: target.id,
+          relationType: 'related',
+          createdAt: now
+        });
+      });
+    });
+
+    return {subjects, categories, terms, relations, questionTerms, settings};
+  }
 
   function createKnowledgeMapService(data, options = {}) {
-    const mapData = data || {};
+    const mapData = buildCompleteMapData(data || {}, safeArray(options.terms));
     const subjects = safeArray(mapData.subjects);
     const categories = safeArray(mapData.categories);
     const terms = safeArray(mapData.terms);
@@ -118,12 +290,21 @@ window.FEKnowledgeMap = (() => {
       return term ? resolveTerm(term) : null;
     }
 
+    const outgoingRelations = new Map();
+    const incomingRelations = new Map();
+    relations.forEach(relation => {
+      if (!outgoingRelations.has(relation.sourceTermId)) outgoingRelations.set(relation.sourceTermId, []);
+      if (!incomingRelations.has(relation.targetTermId)) incomingRelations.set(relation.targetTermId, []);
+      outgoingRelations.get(relation.sourceTermId).push(relation);
+      incomingRelations.get(relation.targetTermId).push(relation);
+    });
+
     function getRelations(termId, type = '') {
-      return relations.filter(relation => relation.sourceTermId === termId && (!type || relation.relationType === type));
+      return safeArray(outgoingRelations.get(termId)).filter(relation => !type || relation.relationType === type);
     }
 
     function getIncomingRelations(termId, type = '') {
-      return relations.filter(relation => relation.targetTermId === termId && (!type || relation.relationType === type));
+      return safeArray(incomingRelations.get(termId)).filter(relation => !type || relation.relationType === type);
     }
 
     function getConnectedTerms(termId, type = '') {
@@ -245,6 +426,11 @@ window.FEKnowledgeMap = (() => {
       return terms.filter(term => categoryIds.has(term.categoryId)).map(resolveTerm);
     }
 
+    function termsForSubject(subjectId) {
+      const categoryIds = new Set(categories.filter(category => category.subjectId === subjectId).map(category => category.id));
+      return terms.filter(term => categoryIds.has(term.categoryId)).map(resolveTerm);
+    }
+
     function categoryProgress(categoryId) {
       const categoryTerms = termsForCategory(categoryId);
       const weightTotal = categoryTerms.reduce((sum, term) => sum + Math.max(1, Number(term.importance || 1)), 0);
@@ -255,6 +441,18 @@ window.FEKnowledgeMap = (() => {
         termCount: categoryTerms.length,
         masteryScore: weightTotal ? Math.round(scoreTotal / weightTotal) : 0,
         statusCounts: counts
+      };
+    }
+
+    function subjectProgress(subjectId) {
+      const subjectTerms = termsForSubject(subjectId);
+      const weightTotal = subjectTerms.reduce((sum, term) => sum + Math.max(1, Number(term.importance || 1)), 0);
+      const scoreTotal = subjectTerms.reduce((sum, term) => sum + masteryScore(term) * Math.max(1, Number(term.importance || 1)), 0);
+      return {
+        subjectId,
+        termCount: subjectTerms.length,
+        masteryScore: weightTotal ? Math.round(scoreTotal / weightTotal) : 0,
+        statusCounts: statusCounts(subjectTerms)
       };
     }
 
@@ -352,6 +550,20 @@ window.FEKnowledgeMap = (() => {
       }));
     }
 
+    function getCategory(categoryId) {
+      return categoryById.get(String(categoryId)) || null;
+    }
+
+    function getCategoryPath(categoryId) {
+      const path = [];
+      let current = getCategory(categoryId);
+      while (current) {
+        path.unshift(current);
+        current = current.parentCategoryId ? getCategory(current.parentCategoryId) : null;
+      }
+      return path;
+    }
+
     return {
       subjects,
       categories,
@@ -360,6 +572,8 @@ window.FEKnowledgeMap = (() => {
       questionTerms,
       statusMeta,
       getTerm,
+      getCategory,
+      getCategoryPath,
       getTermsForAppTermId: appTermId => terms.map(resolveTerm).filter(term => String(term.appTermId) === String(appTermId)),
       getQuestionTermLinks: questionId => safeArray(questionTermsByQuestion.get(questionId)).map(link => Object.assign({}, link, {term: getTerm(link.termId)})).filter(link => link.term),
       getRelations,
@@ -369,7 +583,9 @@ window.FEKnowledgeMap = (() => {
       progressForTerm,
       weakReasons,
       termsForCategory,
+      termsForSubject,
       categoryProgress,
+      subjectProgress,
       mapSummary,
       recommendNext,
       detectPrerequisiteCycle: () => detectPrerequisiteCycle(relations),
