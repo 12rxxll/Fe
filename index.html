@@ -13,6 +13,7 @@
   <title>FE Learning OS</title>
 </head>
 <body>
+  <a class="skip-link" href="#app">本文へ移動</a>
   <header class="app-header">
     <div>
       <p class="eyebrow">基本情報技術者試験</p>
@@ -82,7 +83,7 @@
     </section>
 
     <section id="view-study" class="view" aria-labelledby="studyTitle">
-      <div class="section-heading"><div><p class="eyebrow">Glossary</p><h2 id="studyTitle">用語学習</h2></div><strong id="termCountLabel" class="subtle"></strong></div>
+      <div class="section-heading"><div><p class="eyebrow">Glossary</p><h2 id="studyTitle">用語学習</h2></div><strong id="termCountLabel" class="subtle" aria-live="polite"></strong></div>
       <div class="panel controls-panel">
         <label class="search-box"><span aria-hidden="true">⌕</span><input id="termSearch" type="search" placeholder="用語・解説・関連語を検索" autocomplete="off"></label>
         <div class="filter-row">
@@ -97,7 +98,7 @@
     </section>
 
     <section id="view-quiz" class="view" aria-labelledby="quizTitle">
-      <div class="section-heading"><div><p class="eyebrow">Practice</p><h2 id="quizTitle">問題演習</h2></div><span id="quizSessionStatus" class="subtle"></span></div>
+      <div class="section-heading"><div><p class="eyebrow">Practice</p><h2 id="quizTitle">問題演習</h2></div><span id="quizSessionStatus" class="subtle" aria-live="polite"></span></div>
       <div id="quizSetup" class="panel">
         <div class="form-grid">
           <label>出題モード<select id="quizMode"><option value="random">ランダム</option><option value="weak">苦手優先</option><option value="due">復習期限</option><option value="unlearned">未学習優先</option></select></label>
@@ -111,13 +112,13 @@
     </section>
 
     <section id="view-review" class="view" aria-labelledby="reviewTitle">
-      <div class="section-heading"><div><p class="eyebrow">Spaced repetition</p><h2 id="reviewTitle">復習</h2></div><strong id="reviewCountLabel" class="subtle"></strong></div>
+      <div class="section-heading"><div><p class="eyebrow">Spaced repetition</p><h2 id="reviewTitle">復習</h2></div><strong id="reviewCountLabel" class="subtle" aria-live="polite"></strong></div>
       <div class="hero-card compact">
         <div><span class="hero-label">今日の復習期限</span><strong id="reviewHeroCount">0語</strong></div>
         <button id="startReviewButton" class="primary" type="button">復習開始</button>
       </div>
       <div class="segmented" role="tablist" aria-label="復習対象の切替">
-        <button class="active" data-review-filter="due" type="button">期限</button><button data-review-filter="wrong" type="button">誤答</button><button data-review-filter="bookmark" type="button">保存</button>
+        <button class="active" data-review-filter="due" type="button" role="tab" aria-selected="true">期限</button><button data-review-filter="wrong" type="button" role="tab" aria-selected="false">誤答</button><button data-review-filter="bookmark" type="button" role="tab" aria-selected="false">保存</button>
       </div>
       <div id="reviewList" class="card-list"></div>
     </section>
@@ -155,12 +156,12 @@
   </main>
 
   <nav class="bottom-nav" aria-label="メインメニュー">
-    <button class="active" data-nav="home" type="button"><span>⌂</span>ホーム</button>
-    <button data-nav="study" type="button"><span>▤</span>用語</button>
-    <button data-nav="quiz" type="button"><span>?</span>問題</button>
-    <button data-nav="review" type="button"><span>↻</span>復習</button>
-    <button data-nav="progress" type="button"><span>▥</span>分析</button>
-    <button data-nav="settings" type="button"><span>⚙</span>設定</button>
+    <button class="active" data-nav="home" type="button" aria-label="ホーム" aria-current="page"><span aria-hidden="true">⌂</span>ホーム</button>
+    <button data-nav="study" type="button" aria-label="用語"><span aria-hidden="true">▤</span>用語</button>
+    <button data-nav="quiz" type="button" aria-label="問題"><span aria-hidden="true">?</span>問題</button>
+    <button data-nav="review" type="button" aria-label="復習"><span aria-hidden="true">↻</span>復習</button>
+    <button data-nav="progress" type="button" aria-label="分析"><span aria-hidden="true">▥</span>分析</button>
+    <button data-nav="settings" type="button" aria-label="設定"><span aria-hidden="true">⚙</span>設定</button>
   </nav>
 
   <dialog id="termDialog"><div id="termDialogContent" class="dialog-body"></div></dialog>

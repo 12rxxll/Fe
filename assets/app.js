@@ -40,12 +40,18 @@ function examStatus(){const value=state.settings.examDate;if(!value)return '試�
 function termScore(t){const s=getTermState(t.id);const total=s.correct+s.wrong;const acc=total?s.correct/total:.5;return (1-s.mastery/5)*3 + s.wrong*1.2 + (1-acc)*4 + (s.due&&s.due<=localDate()?3:0);}
 function readiness(){const coverage=TERMS.length?studiedTerms().length/TERMS.length:0;const acc=(accuracy()??0)/100;return Math.round((coverage*.45+acc*.55)*100);}
 function groupStats(){return getSystems().map(system=>{const terms=TERMS.filter(t=>t['系']===system);const ids=new Set(terms.map(t=>String(t.id)));const attempts=state.attempts.filter(a=>ids.has(String(a.id)));const studied=terms.filter(t=>getTermState(t.id).mastery>0).length;return {system,terms:terms.length,studied,attempts:attempts.length,accuracy:accuracy(attempts)};});}
-function navTo(view){currentView=view;$$('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${view}`));$$('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===view));window.scrollTo({top:0,behavior:'smooth'});renderAll();}
+function syncNavigationState(){
+  $$('.view').forEach(v=>{const active=v.id===`view-${currentView}`;v.classList.toggle('active',active);v.setAttribute('aria-hidden',active?'false':'true');});
+  $$('[data-nav]').forEach(b=>{const active=b.dataset.nav===currentView;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
+}
+function syncReviewTabs(){$$('[data-review-filter]').forEach(b=>{const active=b.dataset.reviewFilter===reviewFilter;b.classList.toggle('active',active);b.setAttribute('aria-selected',active?'true':'false');});}
+function navTo(view){currentView=view;syncNavigationState();window.scrollTo({top:0,behavior:'smooth'});renderAll();}
 function startDueReview(){const due=dueTerms().length;if(due>0){navTo('quiz');startQuiz({mode:'due',length:Math.min(20,Math.max(5,due))});return;}navTo('review');}
 
 function setup(){
   $('todayLabel').textContent=new Intl.DateTimeFormat('ja-JP',{month:'long',day:'numeric',weekday:'short'}).format(new Date());
   getSystems().forEach(s=>{$('systemFilter').add(new Option(s,s));$('quizSystem').add(new Option(s,s));});
+  syncNavigationState();syncReviewTabs();
   $$('[data-nav]').forEach(b=>b.addEventListener('click',()=>navTo(b.dataset.nav)));
   $('quickStartButton').addEventListener('click',()=>{navTo('quiz');$('quizLength').value='10';startQuiz({mode:'weak'});});
   $('homeReviewButton').addEventListener('click',startDueReview);
@@ -55,7 +61,7 @@ function setup(){
   $('loadMoreTerms').addEventListener('click',()=>{visibleTermCount+=40;renderTerms();});
   $('startQuizButton').addEventListener('click',()=>startQuiz());
   $('startReviewButton').addEventListener('click',startDueReview);
-  $$('[data-review-filter]').forEach(b=>b.addEventListener('click',()=>{reviewFilter=b.dataset.reviewFilter;$$('[data-review-filter]').forEach(x=>x.classList.toggle('active',x===b));renderReview();}));
+  $$('[data-review-filter]').forEach(b=>b.addEventListener('click',()=>{reviewFilter=b.dataset.reviewFilter;syncReviewTabs();renderReview();}));
   $('saveSettingsButton').addEventListener('click',saveSettings);
   $('exportButton').addEventListener('click',exportData);
   $('importInput').addEventListener('change',importData);
