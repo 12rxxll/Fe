@@ -1421,9 +1421,30 @@ textarea {
   gap: 8px;
 }
 
+.knowledge-inline-actions.single {
+  grid-template-columns: 1fr;
+}
+
 .knowledge-inline-actions button {
   min-height: 42px;
   padding: 8px 10px;
+}
+
+.knowledge-note-area {
+  width: 100%;
+  min-height: 92px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--panel);
+  color: var(--text);
+  padding: 11px 12px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.knowledge-note-area:focus {
+  outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent);
 }
 
 .map-detail-panel {
