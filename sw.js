@@ -1,4 +1,4 @@
-const CACHE = 'fe-learning-os-v2-20260801-note-review-v13';
+const CACHE = 'fe-learning-os-v2-20260801-map-shortcut-v14';
 const ASSET_PATHS = [
   './',
   './index.html',

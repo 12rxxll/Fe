@@ -40,9 +40,9 @@
       "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "用語検索",
-      "short_name": "用語",
-      "url": "./?view=study",
+      "name": "知識マップ",
+      "short_name": "マップ",
+      "url": "./?view=map",
       "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
