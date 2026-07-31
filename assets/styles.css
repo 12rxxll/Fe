@@ -950,6 +950,12 @@ textarea {
   margin-bottom: 14px;
 }
 
+.map-controls {
+  position: static;
+  top: auto;
+  z-index: auto;
+}
+
 .map-recommendation-body {
   display: grid;
   gap: 8px;
@@ -1838,6 +1844,29 @@ dialog::backdrop {
     top: 62px;
   }
 
+  .map-controls {
+    padding: 10px;
+  }
+
+  .map-controls .filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .map-controls select {
+    grid-column: 1 / -1;
+  }
+
+  .map-controls .search-box input {
+    padding: 10px 0;
+  }
+
+  .map-controls .secondary {
+    min-height: 40px;
+    padding: 9px;
+    font-size: 13px;
+  }
+
   .analytics-row {
     grid-template-columns: 1fr 52px;
   }
@@ -1868,6 +1897,10 @@ dialog::backdrop {
   .filter-row,
   .home-hero-actions {
     grid-template-columns: 1fr;
+  }
+
+  .map-controls .filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .rating-row {
