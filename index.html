@@ -87,21 +87,6 @@
       </section>
     </section>
 
-    <section id="view-study" class="view" aria-labelledby="studyTitle">
-      <div class="section-heading"><div><p class="eyebrow">Glossary</p><h2 id="studyTitle">用語学習</h2></div><strong id="termCountLabel" class="subtle" aria-live="polite"></strong></div>
-      <div class="panel controls-panel">
-        <label class="search-box"><span aria-hidden="true">⌕</span><input id="termSearch" type="search" placeholder="用語・解説・関連語を検索" autocomplete="off"></label>
-        <div class="filter-row">
-          <select id="systemFilter" aria-label="系で絞り込み"><option value="">すべての系</option></select>
-          <select id="masteryFilter" aria-label="理解度で絞り込み">
-            <option value="">すべての理解度</option><option value="unlearned">未学習</option><option value="weak">苦手</option><option value="learned">学習済み</option><option value="bookmarked">ブックマーク</option>
-          </select>
-        </div>
-      </div>
-      <div id="termList" class="card-list"></div>
-      <button id="loadMoreTerms" class="secondary full hidden" type="button">さらに表示</button>
-    </section>
-
     <section id="view-quiz" class="view" aria-labelledby="quizTitle">
       <div class="section-heading"><div><p class="eyebrow">Practice</p><h2 id="quizTitle">問題演習</h2></div><span id="quizSessionStatus" class="subtle" aria-live="polite"></span></div>
       <div id="quizSetup" class="panel">
@@ -147,6 +132,11 @@
         <p id="studyAdviceText" class="help"></p>
       </section>
       <section class="panel"><h3>学習状態</h3><div id="learningStatusSummary" class="learning-status"></div></section>
+      <section class="panel">
+        <h3>記述とテストの進捗</h3>
+        <div id="writingTestSummary" class="learning-status"></div>
+        <div id="writingSubjectSummary" class="analytics-list"></div>
+      </section>
       <section class="panel"><h3>最近14日間の学習量</h3><div id="progressActivityChart" class="activity-chart" aria-label="最近14日間の解答数"></div><p id="progressActivitySummary" class="help"></p></section>
       <section class="panel"><h3>苦手分野</h3><div id="weakAreaSummary" class="stack-list"></div></section>
       <section class="panel"><h3>分野別成績</h3><div id="categoryAnalytics" class="analytics-list"></div></section>
@@ -160,7 +150,8 @@
       </div>
 
       <div class="map-summary-grid" aria-label="知識マップの概要">
-        <article class="stat-card"><span>マップ習熟度</span><strong id="mapMasteryValue">0%</strong><small>重要度を加味した平均</small></article>
+        <article class="stat-card"><span>テスト習熟度</span><strong id="mapMasteryValue">0%</strong><small>重要度を加味した平均</small></article>
+        <article class="stat-card"><span>記述済み</span><strong id="mapWritingValue">0%</strong><small>10文字以上の説明</small></article>
         <article class="stat-card"><span>要復習</span><strong id="mapReviewValue">0</strong><small>期限または忘れかけ</small></article>
         <article class="stat-card"><span>苦手</span><strong id="mapWeakValue">0</strong><small>誤答・低習熟度</small></article>
         <article class="stat-card"><span>習得済み</span><strong id="mapMasteredValue">0</strong><small>安定して正解</small></article>
@@ -176,9 +167,21 @@
         <div id="mapRecommendation" class="map-recommendation-body"></div>
       </section>
 
+      <section class="panel map-chatgpt-panel">
+        <div class="panel-title-row"><h3>記述をChatGPTで確認</h3><strong id="noteBatchReadyCount" class="subtle">0語</strong></div>
+        <p id="noteBatchSummary" class="help"></p>
+        <label class="checkbox-row"><input id="includeSubmittedNotes" type="checkbox">前回送信済みの同一内容も含める</label>
+        <div class="knowledge-inline-actions">
+          <button id="prepareUnsubmittedNotesButton" class="primary" type="button">未送信をまとめる</button>
+          <button id="prepareSelectedNoteButton" class="secondary" type="button">選択中をまとめる</button>
+        </div>
+        <div id="chatgptBatchHistory" class="stack-list compact"></div>
+      </section>
+
       <div class="panel controls-panel map-controls">
         <label class="search-box"><span aria-hidden="true">⌕</span><input id="knowledgeSearch" type="search" placeholder="用語・説明・関連語を検索" autocomplete="off"></label>
         <div class="filter-row">
+          <select id="knowledgeSubjectFilter" aria-label="分野で絞り込み"><option value="">すべての分野</option></select>
           <select id="knowledgeStatusFilter" aria-label="習熟状態で絞り込み">
             <option value="">すべての状態</option>
             <option value="locked">前提未達</option>
@@ -187,6 +190,16 @@
             <option value="review">要復習</option>
             <option value="weak">苦手</option>
             <option value="mastered">習得済み</option>
+          </select>
+          <select id="knowledgeWritingFilter" aria-label="記述状態で絞り込み">
+            <option value="">すべての記述</option>
+            <option value="empty">未記入</option>
+            <option value="short">下書き</option>
+            <option value="written">記入済み</option>
+            <option value="pending">確認待ち</option>
+            <option value="confirmed">確認済み</option>
+            <option value="revise">要修正</option>
+            <option value="insufficient">理解不足</option>
           </select>
           <button id="knowledgeExpandAllButton" class="secondary" type="button">大分類を開く</button>
           <button id="knowledgeCollapseAllButton" class="secondary" type="button">閉じる</button>
@@ -237,17 +250,21 @@
 
   <nav class="bottom-nav" aria-label="メインメニュー">
     <button class="active" data-nav="home" type="button" aria-label="ホーム" aria-current="page"><span aria-hidden="true">⌂</span>ホーム</button>
-    <button data-nav="study" type="button" aria-label="用語"><span aria-hidden="true">▤</span>用語</button>
+    <button data-nav="map" type="button" aria-label="マップ"><span aria-hidden="true">▤</span>マップ</button>
     <button data-nav="quiz" type="button" aria-label="問題"><span aria-hidden="true">?</span>問題</button>
     <button data-nav="review" type="button" aria-label="復習"><span aria-hidden="true">↻</span>復習</button>
-    <button data-nav="map" type="button" aria-label="知識マップ"><span aria-hidden="true">◇</span>マップ</button>
     <button data-nav="progress" type="button" aria-label="分析"><span aria-hidden="true">▥</span>分析</button>
     <button data-nav="settings" type="button" aria-label="設定"><span aria-hidden="true">⚙</span>設定</button>
   </nav>
 
   <dialog id="termDialog"><div id="termDialogContent" class="dialog-body"></div></dialog>
   <dialog id="resultDialog"><div id="resultDialogContent" class="dialog-body"></div></dialog>
+  <dialog id="chatgptBatchDialog"><div id="chatgptBatchDialogContent" class="dialog-body"></div></dialog>
   <div id="updateBanner" class="update-banner hidden" role="status" aria-live="polite"><span>新しい版を利用できます</span><button id="reloadUpdateButton" class="primary" type="button">更新</button></div>
+  <div id="knowledgeNoteToolbar" class="note-nav-toolbar hidden" role="toolbar" aria-label="記述欄の用語移動">
+    <button id="notePrevTermButton" class="secondary" type="button">↑ 前の用語</button>
+    <button id="noteNextTermButton" class="secondary" type="button">↓ 次の用語</button>
+  </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="./assets/terms-data.js"></script>

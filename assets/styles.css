@@ -898,6 +898,10 @@ textarea {
   font-size: 12px;
 }
 
+.analytics-row .progress-split {
+  grid-column: 2 / -1;
+}
+
 .analytics-advice {
   display: grid;
   gap: 10px;
@@ -940,9 +944,48 @@ textarea {
 
 .map-summary-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.progress-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.progress-split > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel) 76%, transparent);
+  padding: 9px;
+}
+
+.progress-split span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.progress-split small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.progress-split.compact {
+  gap: 7px;
+}
+
+.progress-split.compact > div {
+  padding: 7px;
 }
 
 .map-mode-tabs {
@@ -1430,9 +1473,61 @@ textarea {
   padding: 8px 10px;
 }
 
+.map-chatgpt-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.submission-term-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 150px;
+  overflow: auto;
+}
+
+.submission-term-list span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.prompt-preview {
+  width: 100%;
+  min-height: 220px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 11px 12px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .knowledge-note-area {
   width: 100%;
-  min-height: 92px;
+  min-height: 116px;
   border: 1px solid var(--line);
   border-radius: var(--control-radius);
   background: var(--panel);
@@ -1445,6 +1540,67 @@ textarea {
 .knowledge-note-area:focus {
   outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-color: var(--accent);
+}
+
+.knowledge-note-question {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.note-review-grid {
+  display: grid;
+  gap: 9px;
+}
+
+.note-review-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.note-review-grid select,
+.feedback-note-area {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--panel);
+  color: var(--text);
+  padding: 10px 11px;
+}
+
+.feedback-note-area {
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.note-nav-toolbar {
+  position: fixed;
+  right: 12px;
+  left: 12px;
+  bottom: calc(86px + var(--safe-bottom));
+  z-index: 70;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, .18);
+  backdrop-filter: blur(16px);
+}
+
+.note-nav-toolbar button {
+  min-height: 42px;
+}
+
+.note-nav-toolbar button:disabled {
+  opacity: .42;
 }
 
 .map-detail-panel {
@@ -1547,7 +1703,7 @@ textarea {
   left: 0;
   z-index: 50;
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   width: 100%;
   max-width: 1040px;
   margin: 0 auto;
@@ -1668,6 +1824,10 @@ dialog::backdrop {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: 14px;
+}
+
+.dialog-actions.tri {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .note-area {
@@ -1792,7 +1952,7 @@ dialog::backdrop {
   }
 
   .map-summary-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
 
   .overview-category-grid {
