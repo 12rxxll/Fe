@@ -167,6 +167,11 @@
         <article class="stat-card"><span>習得済み</span><strong id="mapMasteredValue">0</strong><small>安定して正解</small></article>
       </div>
 
+      <div class="segmented map-mode-tabs" role="tablist" aria-label="知識マップ表示">
+        <button id="knowledgeOverviewButton" class="active" data-map-mode="overview" type="button" role="tab" aria-selected="true">全体</button>
+        <button id="knowledgeExploreButton" data-map-mode="tree" type="button" role="tab" aria-selected="false">探索</button>
+      </div>
+
       <section class="panel map-recommendation">
         <div class="panel-title-row"><h3>次に学ぶ</h3><button id="focusRecommendationButton" class="text-button" type="button">表示</button></div>
         <div id="mapRecommendation" class="map-recommendation-body"></div>
@@ -184,14 +189,13 @@
             <option value="weak">苦手</option>
             <option value="mastered">習得済み</option>
           </select>
-          <button id="knowledgeOverviewButton" class="secondary active" type="button">全体図</button>
           <button id="knowledgeExpandAllButton" class="secondary" type="button">大分類を開く</button>
           <button id="knowledgeCollapseAllButton" class="secondary" type="button">閉じる</button>
           <button id="knowledgeResetViewButton" class="secondary" type="button">絞り込み解除</button>
         </div>
       </div>
 
-      <section id="knowledgeOverviewPanel" class="panel knowledge-overview-panel"></section>
+      <section id="knowledgeOverviewPanel" class="knowledge-overview-panel"></section>
 
       <div class="map-layout">
         <section class="panel map-tree-panel">

@@ -1,4 +1,4 @@
-const CACHE = 'fe-learning-os-v2-20260731-full-knowledge-map-v1';
+const CACHE = 'fe-learning-os-v2-20260731-map-ui-v2';
 const ASSET_PATHS = [
   './',
   './index.html',
