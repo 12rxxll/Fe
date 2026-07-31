@@ -53,6 +53,12 @@
         </div>
       </div>
 
+      <section class="panel action-plan">
+        <div class="panel-title-row"><h3>今日やること</h3><span id="todayTaskSummary" class="subtle"></span></div>
+        <div id="todayTasks" class="task-list" aria-live="polite"></div>
+        <button id="recommendedQuizButton" class="primary full" type="button">おすすめ演習を始める</button>
+      </section>
+
       <div class="stats-grid">
         <article class="stat-card"><span>連続学習</span><strong id="streakValue">0日</strong><small>現在のストリーク</small></article>
         <article class="stat-card"><span>正答率</span><strong id="accuracyValue">—</strong><small>累計</small></article>
@@ -101,7 +107,7 @@
       <div class="section-heading"><div><p class="eyebrow">Practice</p><h2 id="quizTitle">問題演習</h2></div><span id="quizSessionStatus" class="subtle" aria-live="polite"></span></div>
       <div id="quizSetup" class="panel">
         <div class="form-grid">
-          <label>出題モード<select id="quizMode"><option value="random">ランダム</option><option value="weak">苦手優先</option><option value="due">復習期限</option><option value="unlearned">未学習優先</option></select></label>
+          <label>出題モード<select id="quizMode"><option value="recommended">おすすめ</option><option value="random">ランダム</option><option value="weak">苦手優先</option><option value="due">復習期限</option><option value="unlearned">未学習優先</option></select></label>
           <label>分野<select id="quizSystem"><option value="">全分野</option></select></label>
           <label>問題数<select id="quizLength"><option value="5">5問</option><option value="10" selected>10問</option><option value="20">20問</option></select></label>
           <label>問題形式<select id="quizType"><option value="mixed">ミックス</option><option value="description">説明 → 用語</option><option value="term">用語 → 説明</option></select></label>
