@@ -945,6 +945,11 @@ textarea {
   margin-bottom: 14px;
 }
 
+.map-mode-tabs {
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: 14px;
+}
+
 .map-recommendation-body {
   display: grid;
   gap: 8px;
@@ -963,7 +968,7 @@ textarea {
 
 .knowledge-overview-panel {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .overview-head,
@@ -979,7 +984,26 @@ textarea {
   margin-bottom: 0;
 }
 
+.overview-head {
+  align-items: flex-start;
+  padding: 2px 2px 4px;
+}
+
+.overview-head .help {
+  margin: 6px 0 0;
+}
+
+.overview-head > strong {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
 .knowledge-overview-grid,
+.overview-subject-list,
 .overview-category-grid {
   display: grid;
   gap: 10px;
@@ -1002,6 +1026,35 @@ textarea {
   gap: 7px;
 }
 
+.overview-subject-section {
+  display: grid;
+  gap: 9px;
+}
+
+.overview-subject-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 2px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.overview-subject-heading h3 {
+  margin-bottom: 2px;
+}
+
+.overview-subject-heading small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.overview-subject-heading b {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
 .overview-card span,
 .overview-category span {
   color: var(--muted);
@@ -1022,6 +1075,14 @@ textarea {
 .overview-category strong {
   display: block;
   color: var(--text);
+}
+
+.overview-category small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .overview-category b {
@@ -1619,6 +1680,10 @@ dialog::backdrop {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .overview-category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .map-layout {
     grid-template-columns: minmax(0, 1.4fr) minmax(280px, .8fr);
     align-items: start;
@@ -1691,6 +1756,10 @@ dialog::backdrop {
 
   .knowledge-overview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .overview-head {
+    flex-direction: column;
   }
 
   .overview-category {

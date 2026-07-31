@@ -22,7 +22,7 @@ let refreshingForUpdate = false;
 let knowledgeMapService = null;
 let selectedKnowledgeTermId = '';
 let knowledgeMapDefaultsApplied = false;
-let knowledgeOverviewVisible = true;
+let knowledgeMapMode = 'overview';
 const knowledgeExpandedCategories = new Set();
 const knowledgeCategoryLimits = new Map();
 const termById = new Map(TERMS.map(t => [String(t.id), t]));
@@ -169,11 +169,11 @@ function setup(){
   $('loadMoreTerms').addEventListener('click',()=>{visibleTermCount+=40;renderTerms();});
   $('knowledgeSearch').addEventListener('input',renderKnowledgeMap);
   $('knowledgeStatusFilter').addEventListener('change',renderKnowledgeMap);
-  $('knowledgeOverviewButton').addEventListener('click',()=>{knowledgeOverviewVisible=!knowledgeOverviewVisible;renderKnowledgeMap();});
+  $$('[data-map-mode]').forEach(button=>button.addEventListener('click',()=>{knowledgeMapMode=button.dataset.mapMode||'overview';renderKnowledgeMap();}));
   $('knowledgeExpandAllButton').addEventListener('click',()=>{const svc=getKnowledgeService();if(svc)svc.categories.filter(category=>!category.parentCategoryId).forEach(category=>knowledgeExpandedCategories.add(category.id));renderKnowledgeMap();});
   $('knowledgeCollapseAllButton').addEventListener('click',()=>{knowledgeExpandedCategories.clear();knowledgeCategoryLimits.clear();renderKnowledgeMap();});
   $('knowledgeResetViewButton').addEventListener('click',()=>{$('knowledgeSearch').value='';$('knowledgeStatusFilter').value='';knowledgeCategoryLimits.clear();renderKnowledgeMap();});
-  $('focusRecommendationButton').addEventListener('click',()=>{const svc=getKnowledgeService(),rec=svc?.recommendNext(1)[0];if(rec){selectedKnowledgeTermId=rec.term.id;expandKnowledgeCategoryPath(rec.term.categoryId,svc);renderKnowledgeMap();renderKnowledgeDetail(rec.term.id);}});
+  $('focusRecommendationButton').addEventListener('click',()=>{const svc=getKnowledgeService(),rec=svc?.recommendNext(1)[0];if(rec){knowledgeMapMode='tree';selectedKnowledgeTermId=rec.term.id;expandKnowledgeCategoryPath(rec.term.categoryId,svc);renderKnowledgeMap();renderKnowledgeDetail(rec.term.id);}});
   $('startQuizButton').addEventListener('click',()=>startQuiz());
   $('startReviewButton').addEventListener('click',startDueReview);
   $$('[data-review-filter]').forEach(b=>b.addEventListener('click',()=>{reviewFilter=b.dataset.reviewFilter;syncReviewTabs();renderReview();}));
@@ -242,15 +242,25 @@ function knowledgeTermVisible(term,svc){const q=normalize($('knowledgeSearch').v
 function knowledgeFilterActive(){return Boolean(normalize($('knowledgeSearch').value)||$('knowledgeStatusFilter').value);}
 function ensureKnowledgeDefaults(svc){
   if(knowledgeMapDefaultsApplied)return;
-  svc.categories.filter(category=>!category.parentCategoryId).forEach(category=>knowledgeExpandedCategories.add(category.id));
-  ['cat-computer-elements','cat-number','cat-cpu','cat-memory'].forEach(id=>{if(svc.getCategory(id))knowledgeExpandedCategories.add(id);});
+  ['cat-computer-elements'].forEach(id=>{if(svc.getCategory(id))knowledgeExpandedCategories.add(id);});
   knowledgeMapDefaultsApplied=true;
 }
 function expandKnowledgeCategoryPath(categoryId,svc){svc.getCategoryPath(categoryId).forEach(category=>knowledgeExpandedCategories.add(category.id));}
+function syncKnowledgeMapMode(){
+  const overviewMode=knowledgeMapMode!=='tree';
+  $$('[data-map-mode]').forEach(button=>{
+    const active=(button.dataset.mapMode||'overview')===knowledgeMapMode;
+    button.classList.toggle('active',active);
+    button.setAttribute('aria-selected',active?'true':'false');
+  });
+  qs('.map-controls')?.classList.toggle('hidden',overviewMode);
+  qs('.map-layout')?.classList.toggle('hidden',overviewMode);
+}
 function renderKnowledgeMap(){
   const svc=getKnowledgeService();
   if(!svc){$('knowledgeMapTree').innerHTML='<div class="empty">知識マップデータを読み込めませんでした。</div>';return;}
   ensureKnowledgeDefaults(svc);
+  syncKnowledgeMapMode();
   const summary=svc.mapSummary(),counts=summary.statusCounts;
   $('knowledgeMapCount').textContent=`${summary.termCount}語 / ${summary.categoryCount}カテゴリ / ${summary.relationCount}関係`;
   $('mapMasteryValue').textContent=summary.masteryScore+'%';
@@ -259,6 +269,11 @@ function renderKnowledgeMap(){
   $('mapMasteredValue').textContent=counts.mastered;
   renderKnowledgeRecommendation(svc);
   renderKnowledgeOverview(svc,summary);
+  if(knowledgeMapMode!=='tree'){
+    $('knowledgeMapTree').innerHTML='';
+    bindKnowledgeMapActions();
+    return;
+  }
   const html=svc.getSubjectTree().map(node=>renderKnowledgeSubject(node.subject,node.categories,svc)).join('');
   $('knowledgeMapTree').innerHTML=html||'<div class="empty">条件に合うノードはありません。</div>';
   bindKnowledgeMapActions();
@@ -292,17 +307,17 @@ function renderKnowledgeNode(term,svc){
 function renderKnowledgeOverview(svc,summary){
   const panel=$('knowledgeOverviewPanel');
   if(!panel)return;
-  panel.classList.toggle('hidden',!knowledgeOverviewVisible);
-  $('knowledgeOverviewButton').classList.toggle('active',knowledgeOverviewVisible);
-  if(!knowledgeOverviewVisible)return;
-  const subjects=svc.subjects.slice().sort((a,b)=>a.displayOrder-b.displayOrder),roots=svc.getSubjectTree().flatMap(node=>node.categories.map(category=>({subject:node.subject,category})));
-  panel.innerHTML=`<div class="overview-head"><div><p class="eyebrow">Overview</p><h3>全体図</h3></div><strong>${summary.termCount}語</strong></div><div class="knowledge-overview-grid">${subjects.map(subject=>{const p=svc.subjectProgress(subject.id),c=p.statusCounts;return `<article class="overview-card"><span>${esc(subject.name)}</span><strong>${p.masteryScore}%</strong><div class="progress-track"><span style="width:${p.masteryScore}%"></span></div><small>${p.termCount}語・未学習${c.unlearned}・苦手${c.weak}・習得${c.mastered}</small></article>`;}).join('')}</div><h3 class="overview-subtitle">大分類</h3><div class="overview-category-grid">${roots.map(item=>{const p=svc.categoryProgress(item.category.id),c=p.statusCounts;return `<button class="overview-category text-button" data-map-overview-category="${esc(item.category.id)}" type="button"><span><strong>${esc(item.category.name)}</strong><small>${esc(item.subject.name)}・${p.termCount}語・苦手${c.weak}</small></span><b>${p.masteryScore}%</b></button>`;}).join('')}</div>`;
+  panel.classList.toggle('hidden',knowledgeMapMode!=='overview');
+  if(knowledgeMapMode!=='overview')return;
+  const tree=svc.getSubjectTree();
+  const subjects=svc.subjects.slice().sort((a,b)=>a.displayOrder-b.displayOrder);
+  panel.innerHTML=`<div class="overview-head"><div><p class="eyebrow">Overview</p><h3>全体図</h3><p class="help">基本情報技術者の用語を、分野と大分類ごとの進み具合で整理しています。</p></div><strong>${summary.termCount}語</strong></div><div class="knowledge-overview-grid">${subjects.map(subject=>{const p=svc.subjectProgress(subject.id),c=p.statusCounts;return `<article class="overview-card"><span>${esc(subject.name)}</span><strong>${p.masteryScore}%</strong><div class="progress-track"><span style="width:${p.masteryScore}%"></span></div><small>${p.termCount}語・未学習 ${c.unlearned}・苦手 ${c.weak}・習得 ${c.mastered}</small></article>`;}).join('')}</div><div class="overview-subject-list">${tree.map(node=>{const subjectProgress=svc.subjectProgress(node.subject.id);return `<section class="overview-subject-section"><div class="overview-subject-heading"><div><h3>${esc(node.subject.name)}</h3><small>${subjectProgress.termCount}語・平均 ${subjectProgress.masteryScore}%</small></div><b>${subjectProgress.masteryScore}%</b></div><div class="overview-category-grid">${node.categories.map(category=>{const p=svc.categoryProgress(category.id),c=p.statusCounts;return `<button class="overview-category text-button" data-map-overview-category="${esc(category.id)}" type="button"><span><strong>${esc(category.name)}</strong><small>${p.termCount}語・要復習 ${c.review}・苦手 ${c.weak}</small></span><b>${p.masteryScore}%</b></button>`;}).join('')}</div></section>`;}).join('')}</div>`;
 }
 function bindKnowledgeMapActions(){
-  $$('[data-map-term-id]').forEach(button=>{button.onclick=()=>{selectedKnowledgeTermId=button.dataset.mapTermId;const term=getKnowledgeService()?.getTerm(selectedKnowledgeTermId);if(term)expandKnowledgeCategoryPath(term.categoryId,getKnowledgeService());renderKnowledgeMap();renderKnowledgeDetail(selectedKnowledgeTermId);};button.ondblclick=()=>startKnowledgeTermStudy(button.dataset.mapTermId);});
+  $$('[data-map-term-id]').forEach(button=>{button.onclick=()=>{knowledgeMapMode='tree';selectedKnowledgeTermId=button.dataset.mapTermId;const svc=getKnowledgeService(),term=svc?.getTerm(selectedKnowledgeTermId);if(term)expandKnowledgeCategoryPath(term.categoryId,svc);renderKnowledgeMap();renderKnowledgeDetail(selectedKnowledgeTermId);};button.ondblclick=()=>startKnowledgeTermStudy(button.dataset.mapTermId);});
   $$('[data-map-category-id]').forEach(button=>button.onclick=()=>{const id=button.dataset.mapCategoryId;if(knowledgeExpandedCategories.has(id))knowledgeExpandedCategories.delete(id);else knowledgeExpandedCategories.add(id);renderKnowledgeMap();});
   $$('[data-map-load-category]').forEach(button=>button.onclick=()=>{const id=button.dataset.mapLoadCategory;knowledgeCategoryLimits.set(id,(knowledgeCategoryLimits.get(id)||48)+48);knowledgeExpandedCategories.add(id);renderKnowledgeMap();});
-  $$('[data-map-overview-category]').forEach(button=>button.onclick=()=>{const svc=getKnowledgeService(),id=button.dataset.mapOverviewCategory;expandKnowledgeCategoryPath(id,svc);knowledgeOverviewVisible=false;renderKnowledgeMap();setTimeout(()=>qs(`[data-map-category-id="${CSS.escape(id)}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),0);});
+  $$('[data-map-overview-category]').forEach(button=>button.onclick=()=>{const svc=getKnowledgeService(),id=button.dataset.mapOverviewCategory;knowledgeMapMode='tree';expandKnowledgeCategoryPath(id,svc);renderKnowledgeMap();setTimeout(()=>qs(`[data-map-category-id="${CSS.escape(id)}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),0);});
 }
 function renderKnowledgeDetail(termId){
   const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term)return;
