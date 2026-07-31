@@ -81,6 +81,12 @@ window.FEKnowledgeMap = (() => {
     });
     termsByCategory.forEach(list => list.sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name, 'ja')));
 
+    const questionTermsByQuestion = new Map();
+    questionTerms.forEach(link => {
+      if (!questionTermsByQuestion.has(link.questionId)) questionTermsByQuestion.set(link.questionId, []);
+      questionTermsByQuestion.get(link.questionId).push(link);
+    });
+
     function resolveTerm(term) {
       const names = [term.name, ...safeArray(term.aliases)];
       const appTerm = names.map(name => appTermByName.get(normalize(name))).find(Boolean) || null;
@@ -134,14 +140,16 @@ window.FEKnowledgeMap = (() => {
 
     function masteryScore(term) {
       const state = readState(term);
-      const totalAttempts = Number(state.correct || 0) + Number(state.wrong || 0);
+      const totalAttempts = Number(state.correct || 0) + Number(state.wrong || 0) + Number(state.knowledgeCorrect || 0) + Number(state.knowledgeWrong || 0);
       if (!totalAttempts && !Number(state.mastery || 0) && !state.learnedAt) return 0;
 
-      const accuracyScore = totalAttempts ? (Number(state.correct || 0) / totalAttempts) * 32 : 0;
+      const weightedCorrect = Number(state.correct || 0) + Number(state.knowledgeCorrect || 0);
+      const weightedWrong = Number(state.wrong || 0) + Number(state.knowledgeWrong || 0);
+      const accuracyScore = totalAttempts ? (weightedCorrect / totalAttempts) * 32 : 0;
       const baseMastery = Number(state.mastery || 0) / 5 * 42;
       const attemptScore = Math.min(totalAttempts, 5) * 4;
       const streakScore = Math.min(Number(state.streak || 0), 5) * 4;
-      const wrongPenalty = Math.min(Number(state.wrong || 0) * 4, 18);
+      const wrongPenalty = Math.min(weightedWrong * 4, 18);
       const due = reviewDate(state);
       const duePenalty = due && due <= localDate() ? 10 : 0;
       const stalePenalty = state.last && daysSince(state.last) > Math.max(7, Number(state.interval || 3) * 2) ? 8 : 0;
@@ -158,12 +166,14 @@ window.FEKnowledgeMap = (() => {
 
       const state = readState(term);
       const attempts = attemptsForTerm(term);
-      const totalAttempts = Number(state.correct || 0) + Number(state.wrong || 0);
+      const totalAttempts = Number(state.correct || 0) + Number(state.wrong || 0) + Number(state.knowledgeCorrect || 0) + Number(state.knowledgeWrong || 0);
+      const correctAttempts = Number(state.correct || 0) + Number(state.knowledgeCorrect || 0);
+      const wrongAttempts = Number(state.wrong || 0) + Number(state.knowledgeWrong || 0);
       const score = masteryScore(term);
       const due = reviewDate(state);
       const prerequisites = getPrerequisites(term.id);
       const unmetPrerequisites = prerequisites.filter(prerequisite => masteryScore(prerequisite) < thresholds.prerequisiteMastery);
-      const recentIncorrect = recentIncorrectCount(term);
+      const recentIncorrect = Math.max(recentIncorrectCount(term), Number(state.consecutiveIncorrect || 0));
       let status = 'learning';
 
       if (unmetPrerequisites.length && !totalAttempts && !Number(state.mastery || 0)) status = 'locked';
@@ -180,10 +190,10 @@ window.FEKnowledgeMap = (() => {
         statusMarker: statusMeta[status].marker,
         masteryScore: score,
         totalAttempts,
-        correctAttempts: Number(state.correct || 0),
-        wrongAttempts: Number(state.wrong || 0),
+        correctAttempts,
+        wrongAttempts,
         consecutiveCorrect: Number(state.streak || 0),
-        consecutiveIncorrect: consecutiveIncorrect(attempts),
+        consecutiveIncorrect: Math.max(consecutiveIncorrect(attempts), Number(state.consecutiveIncorrect || 0)),
         hintCount: Number(state.hintCount || 0),
         totalResponseTime: Number(state.totalResponseTime || 0),
         lastStudiedAt: state.learnedAt || state.last || null,
@@ -214,6 +224,9 @@ window.FEKnowledgeMap = (() => {
       if (progress.unmetPrerequisites.length) reasons.push('前提用語の理解不足');
       if (state.last && daysSince(state.last) >= 14) reasons.push('長期間復習していない');
       if (progress.nextReviewAt && progress.nextReviewAt <= localDate()) reasons.push('復習期限を過ぎている');
+      safeArray(state.weakReasons).forEach(reason => {
+        if (reason && !reasons.includes(reason)) reasons.push(reason);
+      });
       return reasons;
     }
 
@@ -322,6 +335,11 @@ window.FEKnowledgeMap = (() => {
         if (!termById.has(relation.sourceTermId)) errors.push(`missing source term: ${relation.sourceTermId}`);
         if (!termById.has(relation.targetTermId)) errors.push(`missing target term: ${relation.targetTermId}`);
       });
+      questionTerms.forEach(link => {
+        if (!termById.has(link.termId)) errors.push(`missing question term: ${link.questionId} -> ${link.termId}`);
+        if (!['primary', 'related', 'prerequisite'].includes(link.role)) errors.push(`invalid question term role: ${link.id}`);
+        if (!(Number(link.weight) > 0 && Number(link.weight) <= 1)) errors.push(`invalid question term weight: ${link.id}`);
+      });
       const cycle = detectPrerequisiteCycle(relations);
       if (cycle.length) errors.push(`prerequisite cycle: ${cycle.join(' -> ')}`);
       return {ok: errors.length === 0, errors};
@@ -342,6 +360,8 @@ window.FEKnowledgeMap = (() => {
       questionTerms,
       statusMeta,
       getTerm,
+      getTermsForAppTermId: appTermId => terms.map(resolveTerm).filter(term => String(term.appTermId) === String(appTermId)),
+      getQuestionTermLinks: questionId => safeArray(questionTermsByQuestion.get(questionId)).map(link => Object.assign({}, link, {term: getTerm(link.termId)})).filter(link => link.term),
       getRelations,
       getIncomingRelations,
       getConnectedTerms,

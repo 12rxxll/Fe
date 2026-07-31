@@ -96,6 +96,19 @@
       const recommendation = service.recommendNext(1)[0];
       assert(recommendation && recommendation.term && recommendation.reason, 'recommendation should have a term and reason');
     });
+
+    test('QuestionTermから問題と用語の関連を取得できる', () => {
+      const links = service.getQuestionTermLinks('sa-001');
+      assert(links.length === 3, `expected 3 links, got ${links.length}`);
+      assert(links.some(link => link.role === 'primary' && link.term.name === '2進数'), 'primary 2進数 link missing');
+    });
+
+    test('重み付き正誤が習熟度と状態判定に反映される', () => {
+      const baseConversion = service.getTerm('term-base-conversion');
+      progress[baseConversion.appTermId] = {mastery: 1, correct: 0, wrong: 0, knowledgeCorrect: 0, knowledgeWrong: 1.5, streak: 0, consecutiveIncorrect: 2, last: '2026-07-31'};
+      assert(service.progressForTerm('term-base-conversion').status === 'weak', 'weighted wrong state should be weak');
+      assert(service.weakReasons('term-base-conversion').length > 0, 'weak reasons should exist');
+    });
   </script>
 </body>
 </html>
