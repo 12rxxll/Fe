@@ -1,4 +1,4 @@
-const CACHE = 'fe-learning-os-v2-20260731-map-chatgpt-v7';
+const CACHE = 'fe-learning-os-v2-20260801-map-close-ui-v8';
 const ASSET_PATHS = [
   './',
   './index.html',

@@ -1364,10 +1364,40 @@ textarea {
   align-items: flex-start;
 }
 
+.knowledge-inline-head > div {
+  min-width: 0;
+}
+
 .knowledge-inline-head h4 {
   margin: 0 0 4px;
   font-size: 16px;
   line-height: 1.35;
+}
+
+.knowledge-inline-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 74%, transparent);
+  color: var(--muted);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0;
+}
+
+.knowledge-inline-close:active {
+  transform: translateY(1px) scale(.96);
+}
+
+.knowledge-inline-close:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  color: var(--accent);
 }
 
 .knowledge-inline-detail p {
