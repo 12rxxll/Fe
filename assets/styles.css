@@ -1345,11 +1345,68 @@ textarea {
   color: #475467;
 }
 
+.knowledge-inline-detail {
+  display: grid;
+  gap: 11px;
+  margin: 0 0 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--accent);
+  border-radius: var(--control-radius);
+  background: var(--panel-2);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, .08);
+}
+
+.knowledge-inline-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.knowledge-inline-head h4 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.knowledge-inline-detail p {
+  margin-bottom: 0;
+}
+
+.knowledge-inline-detail .map-detail-section {
+  gap: 5px;
+}
+
+.knowledge-inline-detail .map-detail-section h5 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.knowledge-inline-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.knowledge-inline-actions button {
+  min-height: 42px;
+  padding: 8px 10px;
+}
+
 .map-detail-panel {
   display: grid;
   gap: 12px;
   align-content: start;
   scroll-margin-top: 86px;
+}
+
+@media (max-width: 699px) {
+  .map-detail-panel {
+    display: none;
+  }
 }
 
 .map-detail-head {
@@ -1701,6 +1758,10 @@ dialog::backdrop {
     top: 86px;
   }
 
+  .knowledge-inline-detail {
+    display: none;
+  }
+
   .card-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1902,6 +1963,10 @@ dialog::backdrop {
 
   .map-controls .filter-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .knowledge-inline-actions {
+    grid-template-columns: 1fr;
   }
 
   .rating-row {

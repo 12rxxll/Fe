@@ -1,4 +1,4 @@
-const CACHE = 'fe-learning-os-v2-20260731-map-detail-scroll-v5';
+const CACHE = 'fe-learning-os-v2-20260731-inline-map-detail-v6';
 const ASSET_PATHS = [
   './',
   './index.html',
