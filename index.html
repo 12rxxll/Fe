@@ -87,21 +87,6 @@
       </section>
     </section>
 
-    <section id="view-study" class="view" aria-labelledby="studyTitle">
-      <div class="section-heading"><div><p class="eyebrow">Glossary</p><h2 id="studyTitle">用語学習</h2></div><strong id="termCountLabel" class="subtle" aria-live="polite"></strong></div>
-      <div class="panel controls-panel">
-        <label class="search-box"><span aria-hidden="true">⌕</span><input id="termSearch" type="search" placeholder="用語・解説・関連語を検索" autocomplete="off"></label>
-        <div class="filter-row">
-          <select id="systemFilter" aria-label="系で絞り込み"><option value="">すべての系</option></select>
-          <select id="masteryFilter" aria-label="理解度で絞り込み">
-            <option value="">すべての理解度</option><option value="unlearned">未学習</option><option value="weak">苦手</option><option value="learned">学習済み</option><option value="bookmarked">ブックマーク</option>
-          </select>
-        </div>
-      </div>
-      <div id="termList" class="card-list"></div>
-      <button id="loadMoreTerms" class="secondary full hidden" type="button">さらに表示</button>
-    </section>
-
     <section id="view-quiz" class="view" aria-labelledby="quizTitle">
       <div class="section-heading"><div><p class="eyebrow">Practice</p><h2 id="quizTitle">問題演習</h2></div><span id="quizSessionStatus" class="subtle" aria-live="polite"></span></div>
       <div id="quizSetup" class="panel">
@@ -179,6 +164,7 @@
       <div class="panel controls-panel map-controls">
         <label class="search-box"><span aria-hidden="true">⌕</span><input id="knowledgeSearch" type="search" placeholder="用語・説明・関連語を検索" autocomplete="off"></label>
         <div class="filter-row">
+          <select id="knowledgeSubjectFilter" aria-label="分野で絞り込み"><option value="">すべての分野</option></select>
           <select id="knowledgeStatusFilter" aria-label="習熟状態で絞り込み">
             <option value="">すべての状態</option>
             <option value="locked">前提未達</option>
@@ -237,10 +223,9 @@
 
   <nav class="bottom-nav" aria-label="メインメニュー">
     <button class="active" data-nav="home" type="button" aria-label="ホーム" aria-current="page"><span aria-hidden="true">⌂</span>ホーム</button>
-    <button data-nav="study" type="button" aria-label="用語"><span aria-hidden="true">▤</span>用語</button>
+    <button data-nav="map" type="button" aria-label="マップ"><span aria-hidden="true">▤</span>マップ</button>
     <button data-nav="quiz" type="button" aria-label="問題"><span aria-hidden="true">?</span>問題</button>
     <button data-nav="review" type="button" aria-label="復習"><span aria-hidden="true">↻</span>復習</button>
-    <button data-nav="map" type="button" aria-label="知識マップ"><span aria-hidden="true">◇</span>マップ</button>
     <button data-nav="progress" type="button" aria-label="分析"><span aria-hidden="true">▥</span>分析</button>
     <button data-nav="settings" type="button" aria-label="設定"><span aria-hidden="true">⚙</span>設定</button>
   </nav>
@@ -248,6 +233,10 @@
   <dialog id="termDialog"><div id="termDialogContent" class="dialog-body"></div></dialog>
   <dialog id="resultDialog"><div id="resultDialogContent" class="dialog-body"></div></dialog>
   <div id="updateBanner" class="update-banner hidden" role="status" aria-live="polite"><span>新しい版を利用できます</span><button id="reloadUpdateButton" class="primary" type="button">更新</button></div>
+  <div id="knowledgeNoteToolbar" class="note-nav-toolbar hidden" role="toolbar" aria-label="記述欄の用語移動">
+    <button id="notePrevTermButton" class="secondary" type="button">↑ 前の用語</button>
+    <button id="noteNextTermButton" class="secondary" type="button">↓ 次の用語</button>
+  </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="./assets/terms-data.js"></script>

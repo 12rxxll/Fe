@@ -1,4 +1,4 @@
-const CACHE = 'fe-learning-os-v2-20260801-map-note-actions-v9';
+const CACHE = 'fe-learning-os-v2-20260801-nav-map-notes-v10';
 const ASSET_PATHS = [
   './',
   './index.html',

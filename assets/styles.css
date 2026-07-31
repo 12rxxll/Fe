@@ -1432,7 +1432,7 @@ textarea {
 
 .knowledge-note-area {
   width: 100%;
-  min-height: 92px;
+  min-height: 116px;
   border: 1px solid var(--line);
   border-radius: var(--control-radius);
   background: var(--panel);
@@ -1445,6 +1445,38 @@ textarea {
 .knowledge-note-area:focus {
   outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-color: var(--accent);
+}
+
+.knowledge-note-question {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.note-nav-toolbar {
+  position: fixed;
+  right: 12px;
+  left: 12px;
+  bottom: calc(86px + var(--safe-bottom));
+  z-index: 70;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, .18);
+  backdrop-filter: blur(16px);
+}
+
+.note-nav-toolbar button {
+  min-height: 42px;
+}
+
+.note-nav-toolbar button:disabled {
+  opacity: .42;
 }
 
 .map-detail-panel {
@@ -1547,7 +1579,7 @@ textarea {
   left: 0;
   z-index: 50;
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   width: 100%;
   max-width: 1040px;
   margin: 0 auto;
