@@ -107,10 +107,11 @@
       <div class="section-heading"><div><p class="eyebrow">Practice</p><h2 id="quizTitle">問題演習</h2></div><span id="quizSessionStatus" class="subtle" aria-live="polite"></span></div>
       <div id="quizSetup" class="panel">
         <div class="form-grid">
+          <label>演習タイプ<select id="quizSource"><option value="terms">用語4択</option><option value="subjectA">科目A</option></select></label>
           <label>出題モード<select id="quizMode"><option value="recommended">おすすめ</option><option value="random">ランダム</option><option value="weak">苦手優先</option><option value="due">復習期限</option><option value="unlearned">未学習優先</option></select></label>
           <label>分野<select id="quizSystem"><option value="">全分野</option></select></label>
           <label>問題数<select id="quizLength"><option value="5">5問</option><option value="10" selected>10問</option><option value="20">20問</option></select></label>
-          <label>問題形式<select id="quizType"><option value="mixed">ミックス</option><option value="description">説明 → 用語</option><option value="term">用語 → 説明</option></select></label>
+          <label>問題形式<select id="quizType"><option value="mixed">ミックス</option><option value="description">説明 → 用語</option><option value="term">用語 → 説明</option><option value="mock">模試形式</option></select></label>
         </div>
         <button id="startQuizButton" class="primary full" type="button">演習を開始</button>
       </div>
@@ -187,6 +188,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="./assets/terms-data.js"></script>
+  <script src="./assets/subject-a-data.js"></script>
   <script src="./assets/app.js"></script>
 </body>
 </html>

@@ -1,10 +1,11 @@
-const CACHE = 'fe-learning-os-v2-20260731-ui';
+const CACHE = 'fe-learning-os-v2-20260731-subject-a';
 const ASSET_PATHS = [
   './',
   './index.html',
   './assets/styles.css',
   './assets/app.js',
   './assets/terms-data.js',
+  './assets/subject-a-data.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
