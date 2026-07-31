@@ -892,6 +892,52 @@ textarea {
   height: 9px;
 }
 
+.analytics-row small {
+  grid-column: 2 / -1;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.analytics-advice {
+  display: grid;
+  gap: 10px;
+}
+
+.learning-status {
+  display: grid;
+  gap: 12px;
+}
+
+.status-segment {
+  display: grid;
+  gap: 7px;
+}
+
+.status-segment > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-segment strong {
+  color: var(--text);
+}
+
+.status-segment span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.status-segment.unlearned .progress-track span {
+  background: var(--muted);
+}
+
+.status-segment.mastered .progress-track span {
+  background: var(--good);
+}
+
 .form-stack {
   display: grid;
   gap: 13px;
@@ -1282,6 +1328,10 @@ dialog::backdrop {
   .analytics-row .progress-track {
     grid-column: 1 / -1;
     grid-row: 2;
+  }
+
+  .analytics-row small {
+    grid-column: 1 / -1;
   }
 
   .quiz-meta {

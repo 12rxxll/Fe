@@ -141,6 +141,14 @@
         <article class="stat-card"><span>学習日数</span><strong id="studyDaysValue">0</strong><small>1問以上解答</small></article>
         <article class="stat-card"><span>最高連続</span><strong id="bestStreakValue">0日</strong><small>過去最高</small></article>
       </div>
+      <section class="panel analytics-advice">
+        <div class="panel-title-row"><h3>学習準備度</h3><strong id="progressReadinessValue">0%</strong></div>
+        <div class="progress-track tall"><span id="progressReadinessBar"></span></div>
+        <p id="studyAdviceText" class="help"></p>
+      </section>
+      <section class="panel"><h3>学習状態</h3><div id="learningStatusSummary" class="learning-status"></div></section>
+      <section class="panel"><h3>最近14日間の学習量</h3><div id="progressActivityChart" class="activity-chart" aria-label="最近14日間の解答数"></div><p id="progressActivitySummary" class="help"></p></section>
+      <section class="panel"><h3>苦手分野</h3><div id="weakAreaSummary" class="stack-list"></div></section>
       <section class="panel"><h3>分野別成績</h3><div id="categoryAnalytics" class="analytics-list"></div></section>
       <section class="panel"><h3>間違えやすい用語</h3><div id="mistakeRanking" class="stack-list"></div></section>
     </section>
