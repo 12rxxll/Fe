@@ -5,6 +5,7 @@
 ## 収録内容
 
 - FE用語 955語
+- FEシラバス Ver.9.2 の用語例を補助収録（追加データ 3,012件、学習対象合計 3,958語）
 - 用語検索・分類フィルター
 - 理解度 Lv.0〜5
 - 4択問題（説明→用語／用語→説明）
@@ -56,6 +57,7 @@
 - `assets/styles.css`: 画面レイアウト、スマホ表示、ダークモード
 - `assets/app.js`: 状態管理、画面遷移、検索、問題演習、復習、分析、設定、バックアップ
 - `assets/terms-data.js`: `window.FE_TERMS` として読み込むFE用語データ
+- `assets/syllabus-terms.js`: `window.FE_SYLLABUS_TERMS` として読み込むFEシラバス用語例の補助データ
 - `assets/subject-a-data.js`: `window.FE_SUBJECT_A_QUESTIONS` として読み込む科目A対策のオリジナルサンプル問題
 - `manifest.webmanifest`: PWA名、起動URL、scope、アイコン、ショートカット
 - `sw.js`: オフライン用キャッシュとナビゲーション時のフォールバック
@@ -64,7 +66,11 @@
 
 ### 用語データ
 
-`assets/terms-data.js` には955語を収録しています。各用語は次の項目を持ちます。
+`assets/terms-data.js` には955語を収録しています。`assets/syllabus-terms.js` には、FEシラバス Ver.9.2 の用語例から、既存データで扱えるものを除いた3,012件を補助収録しています。アプリ起動時に両方を結合し、同名語の重複を除いた3,958語を検索、理解度管理、4択問題、復習、分析の対象にします。
+
+シラバス補助データは用語名と分類をもとに、アプリ用の短い説明・着眼点・関連語を独自に付与しています。過去問やPDF本文の説明文は転載していません。
+
+各用語は次の項目を持ちます。
 
 - `id`
 - `用語`
@@ -77,6 +83,7 @@
 - `試験での着眼点`
 - `関連語`
 - `検索語`
+- `出典`（シラバス補助データのみ）
 
 `系` は `テクノロジ系`、`マネジメント系`、`ストラテジ系` の3種類です。
 
@@ -110,7 +117,7 @@ PWAショートカットでは `./?view=quiz` と `./?view=study` を使い、�
 
 GitHub Pagesの `https://12rxxll.github.io/Fe/` 配下で動かすため、HTML、manifest、service worker、アイコン、CSS、JSは相対パスで参照します。`/` 始まりの絶対パスは使いません。
 
-Service Workerは登録scopeを基準にキャッシュURLを組み立てます。主要ファイル、用語データ、科目Aデータ、manifest、PWAアイコンをキャッシュし、オフライン時の画面遷移は `index.html` にフォールバックします。
+Service Workerは登録scopeを基準にキャッシュURLを組み立てます。主要ファイル、用語データ、シラバス補助データ、科目Aデータ、manifest、PWAアイコンをキャッシュし、オフライン時の画面遷移は `index.html` にフォールバックします。
 
 ナビゲーションはネットワーク優先、静的資産はキャッシュを返しつつ裏で更新する方針です。新しいService Workerが待機状態になった場合は、画面下部に更新ボタンを表示して再読み込みを促します。
 
@@ -122,7 +129,7 @@ Service Workerは登録scopeを基準にキャッシュURLを組み立てます�
 2. 320px、375px、390px、430px、PC幅で横スクロールや文字の重なりがないことを確認する。
 3. ライト・ダーク両方のテーマで、ホーム、用語、問題、復習、分析、設定を確認する。
 4. コンソールエラーがないことを確認する。
-5. `manifest.webmanifest`、`assets/styles.css`、`assets/app.js`、`assets/terms-data.js`、`assets/subject-a-data.js`、`sw.js`、各アイコンがHTTP 200で取得できることを確認する。
+5. `manifest.webmanifest`、`assets/styles.css`、`assets/app.js`、`assets/terms-data.js`、`assets/syllabus-terms.js`、`assets/subject-a-data.js`、`sw.js`、各アイコンがHTTP 200で取得できることを確認する。
 6. 用語検索で既知の用語が見つかり、用語詳細のメモ、理解度、ブックマーク、ChatGPT用プロンプトコピーが動くことを確認する。
 7. 用語4択と科目A演習を開始し、1問回答してフィードバック、解説、結果画面が表示されることを確認する。
 8. 初回利用、既存データあり、破損JSONの3ケースで起動し、`localStorage` の `fe-learning-os-v2` が残り、`version: 2` のまま保存されることを確認する。

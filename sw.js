@@ -1,10 +1,11 @@
-const CACHE = 'fe-learning-os-v2-20260731-pwa';
+const CACHE = 'fe-learning-os-v2-20260731-syllabus-terms';
 const ASSET_PATHS = [
   './',
   './index.html',
   './assets/styles.css',
   './assets/app.js',
   './assets/terms-data.js',
+  './assets/syllabus-terms.js',
   './assets/subject-a-data.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
