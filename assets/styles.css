@@ -1129,6 +1129,35 @@ dialog::backdrop {
   transform: translate(-50%, 0);
 }
 
+.update-banner {
+  position: fixed;
+  right: 12px;
+  bottom: calc(86px + var(--safe-bottom));
+  left: 12px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 520px;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 10px 10px 10px 14px;
+}
+
+.update-banner span {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.update-banner button {
+  min-height: 38px;
+  padding: 8px 13px;
+}
+
 .empty {
   color: var(--muted);
   padding: 25px 10px;

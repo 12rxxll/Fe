@@ -1,4 +1,4 @@
-const CACHE = 'fe-learning-os-v2-20260731-subject-a';
+const CACHE = 'fe-learning-os-v2-20260731-pwa';
 const ASSET_PATHS = [
   './',
   './index.html',
@@ -16,7 +16,6 @@ const FALLBACK_URL = new URL('./index.html', self.registration.scope).href;
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
@@ -26,25 +25,28 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
+  if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request).catch(() => caches.match(FALLBACK_URL)));
+    return;
+  }
 
-      return fetch(event.request).then(response => {
-        if (!response || response.status !== 200) return response;
-        const clone = response.clone();
-        caches.open(CACHE).then(cache => cache.put(event.request, clone));
+  event.respondWith(
+    caches.open(CACHE).then(cache => cache.match(event.request).then(cached => {
+      const fetched = fetch(event.request).then(response => {
+        if (response && response.status === 200) cache.put(event.request, response.clone());
         return response;
-      }).catch(() => {
-        if (event.request.mode === 'navigate') return caches.match(FALLBACK_URL);
-        return caches.match(event.request);
-      });
-    })
+      }).catch(() => cached || Response.error());
+      return cached || fetched;
+    }))
   );
 });

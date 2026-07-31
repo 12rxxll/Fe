@@ -13,6 +13,8 @@ let visibleTermCount = 40;
 let reviewFilter = 'due';
 let quiz = null;
 let deferredInstall = null;
+let pendingServiceWorker = null;
+let refreshingForUpdate = false;
 const termById = new Map(TERMS.map(t => [String(t.id), t]));
 const termByName = new Map(TERMS.map(t => [normalize(t['用語']), t]));
 
@@ -78,6 +80,8 @@ function syncNavigationState(){
 function syncReviewTabs(){$$('[data-review-filter]').forEach(b=>{const active=b.dataset.reviewFilter===reviewFilter;b.classList.toggle('active',active);b.setAttribute('aria-selected',active?'true':'false');});}
 function navTo(view){currentView=view;syncNavigationState();window.scrollTo({top:0,behavior:'smooth'});renderAll();}
 function startDueReview(){const queue=priorityReviewTerms();if(queue.length>0){navTo('quiz');startQuiz({mode:'due',length:Math.min(20,Math.max(5,queue.length))});return;}navTo('review');}
+function showUpdateBanner(worker){pendingServiceWorker=worker;$('updateBanner').classList.remove('hidden');}
+function registerServiceWorker(){if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(refreshingForUpdate)return;refreshingForUpdate=true;location.reload();});navigator.serviceWorker.register('./sw.js').then(reg=>{if(reg.waiting&&navigator.serviceWorker.controller)showUpdateBanner(reg.waiting);reg.addEventListener('updatefound',()=>{const worker=reg.installing;if(!worker)return;worker.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)showUpdateBanner(worker);});});}).catch(()=>{});}
 
 function setup(){
   $('todayLabel').textContent=new Intl.DateTimeFormat('ja-JP',{month:'long',day:'numeric',weekday:'short'}).format(new Date());
@@ -99,11 +103,12 @@ function setup(){
   $('importInput').addEventListener('change',importData);
   $('resetButton').addEventListener('click',resetData);
   $('copyGeneralPromptButton').addEventListener('click',copyWeakPrompt);
+  $('reloadUpdateButton').addEventListener('click',()=>{if(pendingServiceWorker)pendingServiceWorker.postMessage({type:'SKIP_WAITING'});});
   $('appTermCount').textContent=`${TERMS.length}語`;
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;$('installButton').classList.remove('hidden');});
   $('installButton').addEventListener('click',async()=>{if(deferredInstall){deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;$('installButton').classList.add('hidden');}else{showToast('Safariの共有メニューから「ホーム画面に追加」を選択してください');}});
   if(window.matchMedia){const darkPreference=matchMedia('(prefers-color-scheme: dark)');darkPreference.addEventListener?.('change',()=>{if((state.settings.theme||'system')==='system')applyTheme();});}
-  if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  registerServiceWorker();
   if(needsMigrationSave){saveState(false);needsMigrationSave=false;}
   applyTheme();
   const initialView=new URLSearchParams(location.search).get('view');

@@ -110,7 +110,9 @@ PWAショートカットでは `./?view=quiz` と `./?view=study` を使い、�
 
 GitHub Pagesの `https://12rxxll.github.io/Fe/` 配下で動かすため、HTML、manifest、service worker、アイコン、CSS、JSは相対パスで参照します。`/` 始まりの絶対パスは使いません。
 
-Service Workerは登録scopeを基準にキャッシュURLを組み立てます。主要ファイル、用語データ、manifest、PWAアイコンをキャッシュし、オフライン時の画面遷移は `index.html` にフォールバックします。
+Service Workerは登録scopeを基準にキャッシュURLを組み立てます。主要ファイル、用語データ、科目Aデータ、manifest、PWAアイコンをキャッシュし、オフライン時の画面遷移は `index.html` にフォールバックします。
+
+ナビゲーションはネットワーク優先、静的資産はキャッシュを返しつつ裏で更新する方針です。新しいService Workerが待機状態になった場合は、画面下部に更新ボタンを表示して再読み込みを促します。
 
 ## 手動テスト手順
 
