@@ -3,12 +3,15 @@
   "short_name": "FE学習",
   "description": "基本情報技術者試験の用語学習・問題演習・復習管理",
   "lang": "ja",
-  "start_url": "./index.html",
+  "id": "./",
+  "start_url": "./",
   "scope": "./",
+  "categories": ["education", "productivity"],
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait-primary",
-  "background_color": "#f1f5f9",
-  "theme_color": "#0f172a",
+  "background_color": "#f5f7fb",
+  "theme_color": "#0f766e",
   "icons": [
     {
       "src": "./icons/icon-192.png",
@@ -27,6 +30,20 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "問題演習",
+      "short_name": "問題",
+      "url": "./?view=quiz",
+      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "用語検索",
+      "short_name": "用語",
+      "url": "./?view=study",
+      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

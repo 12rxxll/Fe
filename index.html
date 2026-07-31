@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#10141d" media="(prefers-color-scheme: dark)">
   <meta name="description" content="基本情報技術者試験の用語学習・問題演習・復習管理ができる無料PWA">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./icons/icon-192.png">
-  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
   <link rel="stylesheet" href="./assets/styles.css">
   <title>FE Learning OS</title>
 </head>
@@ -27,13 +28,28 @@
         <span id="todayLabel" class="subtle"></span>
       </div>
 
-      <div class="hero-card">
-        <div>
-          <span class="hero-label">今日の問題</span>
-          <strong id="dailyProgressText">0 / 10</strong>
-          <div class="progress-track"><span id="dailyProgressBar"></span></div>
+      <div class="home-hero">
+        <div class="home-hero-main">
+          <p class="eyebrow">Study plan</p>
+          <strong id="homePlanTitle" class="home-hero-title">今日の1セットを始める</strong>
+          <p id="homePlanText" class="home-hero-copy">10問解いて、苦手語を復習リストへ回しましょう。</p>
+          <div class="home-progress-row">
+            <div>
+              <span class="hero-label">今日の問題</span>
+              <strong id="dailyProgressText">0 / 10</strong>
+            </div>
+            <span id="examCountdownText" class="status-pill">試験日未設定</span>
+          </div>
+          <div class="progress-track hero-progress"><span id="dailyProgressBar"></span></div>
+          <div class="home-hero-actions">
+            <button id="quickStartButton" class="primary large" type="button">10問スタート</button>
+            <button id="homeReviewButton" class="secondary large" type="button">復習を見る</button>
+          </div>
         </div>
-        <button id="quickStartButton" class="primary large" type="button">10問スタート</button>
+        <div class="readiness-ring" aria-label="学習準備度">
+          <span id="homeReadinessRing">0%</span>
+          <small>準備度</small>
+        </div>
       </div>
 
       <div class="stats-grid">
