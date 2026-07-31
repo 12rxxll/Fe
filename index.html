@@ -154,6 +154,59 @@
       <section class="panel"><h3>間違えやすい用語</h3><div id="mistakeRanking" class="stack-list"></div></section>
     </section>
 
+    <section id="view-map" class="view" aria-labelledby="mapTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">Knowledge map</p><h2 id="mapTitle">知識マップ</h2></div>
+        <strong id="knowledgeMapCount" class="subtle" aria-live="polite"></strong>
+      </div>
+
+      <div class="map-summary-grid" aria-label="知識マップの概要">
+        <article class="stat-card"><span>マップ習熟度</span><strong id="mapMasteryValue">0%</strong><small>重要度を加味した平均</small></article>
+        <article class="stat-card"><span>要復習</span><strong id="mapReviewValue">0</strong><small>期限または忘れかけ</small></article>
+        <article class="stat-card"><span>苦手</span><strong id="mapWeakValue">0</strong><small>誤答・低習熟度</small></article>
+        <article class="stat-card"><span>習得済み</span><strong id="mapMasteredValue">0</strong><small>安定して正解</small></article>
+      </div>
+
+      <section class="panel map-recommendation">
+        <div class="panel-title-row"><h3>次に学ぶ</h3><button id="focusRecommendationButton" class="text-button" type="button">表示</button></div>
+        <div id="mapRecommendation" class="map-recommendation-body"></div>
+      </section>
+
+      <div class="panel controls-panel map-controls">
+        <label class="search-box"><span aria-hidden="true">⌕</span><input id="knowledgeSearch" type="search" placeholder="用語・説明・関連語を検索" autocomplete="off"></label>
+        <div class="filter-row">
+          <select id="knowledgeStatusFilter" aria-label="習熟状態で絞り込み">
+            <option value="">すべての状態</option>
+            <option value="locked">前提未達</option>
+            <option value="unlearned">未学習</option>
+            <option value="learning">学習中</option>
+            <option value="review">要復習</option>
+            <option value="weak">苦手</option>
+            <option value="mastered">習得済み</option>
+          </select>
+          <button id="knowledgeResetViewButton" class="secondary" type="button">絞り込み解除</button>
+        </div>
+      </div>
+
+      <div class="map-layout">
+        <section class="panel map-tree-panel">
+          <div class="map-legend" aria-label="状態の凡例">
+            <span class="map-state state-locked"><b>LOCK</b>前提未達</span>
+            <span class="map-state state-unlearned"><b>未</b>未学習</span>
+            <span class="map-state state-learning"><b>学</b>学習中</span>
+            <span class="map-state state-review"><b>復</b>要復習</span>
+            <span class="map-state state-weak"><b>苦</b>苦手</span>
+            <span class="map-state state-mastered"><b>済</b>習得済み</span>
+          </div>
+          <div id="knowledgeMapTree" class="knowledge-tree" role="tree" aria-label="分野、カテゴリ、用語の知識マップ"></div>
+        </section>
+
+        <aside id="knowledgeDetailPanel" class="panel map-detail-panel" aria-live="polite">
+          <p class="empty">用語ノードを選択すると詳細を表示します。</p>
+        </aside>
+      </div>
+    </section>
+
     <section id="view-settings" class="view" aria-labelledby="settingsTitle">
       <div class="section-heading"><div><p class="eyebrow">Settings</p><h2 id="settingsTitle">設定</h2></div></div>
       <section class="panel form-stack">
@@ -179,6 +232,7 @@
     <button data-nav="study" type="button" aria-label="用語"><span aria-hidden="true">▤</span>用語</button>
     <button data-nav="quiz" type="button" aria-label="問題"><span aria-hidden="true">?</span>問題</button>
     <button data-nav="review" type="button" aria-label="復習"><span aria-hidden="true">↻</span>復習</button>
+    <button data-nav="map" type="button" aria-label="知識マップ"><span aria-hidden="true">◇</span>マップ</button>
     <button data-nav="progress" type="button" aria-label="分析"><span aria-hidden="true">▥</span>分析</button>
     <button data-nav="settings" type="button" aria-label="設定"><span aria-hidden="true">⚙</span>設定</button>
   </nav>
@@ -191,6 +245,8 @@
   <script src="./assets/terms-data.js"></script>
   <script src="./assets/syllabus-terms.js"></script>
   <script src="./assets/subject-a-data.js"></script>
+  <script src="./assets/knowledge-map-data.js"></script>
+  <script src="./assets/knowledge-map.js"></script>
   <script src="./assets/app.js"></script>
 </body>
 </html>

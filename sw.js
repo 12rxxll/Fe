@@ -1,4 +1,4 @@
-const CACHE = 'fe-learning-os-v2-20260731-syllabus-terms';
+const CACHE = 'fe-learning-os-v2-20260731-knowledge-map-v2';
 const ASSET_PATHS = [
   './',
   './index.html',
@@ -7,6 +7,8 @@ const ASSET_PATHS = [
   './assets/terms-data.js',
   './assets/syllabus-terms.js',
   './assets/subject-a-data.js',
+  './assets/knowledge-map-data.js',
+  './assets/knowledge-map.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
