@@ -1387,7 +1387,7 @@ textarea {
 
 .knowledge-inline-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1965,10 +1965,6 @@ dialog::backdrop {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .knowledge-inline-actions {
-    grid-template-columns: 1fr;
-  }
-
   .rating-row {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -2010,6 +2006,10 @@ dialog::backdrop {
 
   .stat-card strong {
     font-size: 21px;
+  }
+
+  .knowledge-inline-actions {
+    grid-template-columns: 1fr;
   }
 }
 
