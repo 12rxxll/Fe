@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>FEL Tilt Memory Cards</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f4;
+      --panel: #ffffff;
+      --panel-strong: #f0f2ef;
+      --text: #202521;
+      --muted: #667069;
+      --line: #d8ded8;
+      --accent: #10a37f;
+      --accent-strong: #0d8f70;
+      --warn: #c46a1c;
+      --danger: #d84242;
+      --shadow: 0 18px 42px rgba(20, 30, 25, 0.12);
+      --radius: 22px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #202123;
+        --panel: #2a2b2f;
+        --panel-strong: #343541;
+        --text: #f4f4f4;
+        --muted: #c5c5d2;
+        --line: #45464f;
+        --shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100svh;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button {
+      min-height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 16px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      touch-action: manipulation;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 42%, transparent);
+      outline-offset: 2px;
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    button.ghost {
+      background: transparent;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+    }
+
+    .app {
+      width: min(100%, 620px);
+      margin: 0 auto;
+      padding: calc(18px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));
+    }
+
+    .hero {
+      padding: 18px 2px 10px;
+    }
+
+    .eyebrow {
+      margin: 0 0 4px;
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+      font-size: clamp(1.9rem, 7vw, 2.6rem);
+      line-height: 1.12;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+      font-size: 1.25rem;
+      line-height: 1.3;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      font-size: 1rem;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .panel,
+    .memory-card {
+      margin-top: 14px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-header,
+    .card-header,
+    .status-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: var(--panel-strong);
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .status-pill.on {
+      background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+      color: var(--accent-strong);
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .actions.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .sensor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .readout {
+      min-height: 66px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px;
+      background: var(--panel-strong);
+    }
+
+    .readout span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .readout strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 1.15rem;
+    }
+
+    .gauge {
+      position: relative;
+      height: 18px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--panel-strong);
+    }
+
+    .gauge span {
+      display: block;
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width 160ms ease;
+    }
+
+    .gauge i {
+      position: absolute;
+      top: -3px;
+      bottom: -3px;
+      left: 83.33%;
+      width: 2px;
+      background: var(--warn);
+    }
+
+    .hint {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .memory-card {
+      overflow: hidden;
+    }
+
+    .term-name {
+      margin: 6px 0 2px;
+      font-size: 1.9rem;
+      line-height: 1.18;
+      color: var(--accent);
+      text-align: center;
+    }
+
+    .question {
+      margin: 12px 0;
+      border-radius: 18px;
+      padding: 14px;
+      background: var(--panel-strong);
+      font-weight: 700;
+    }
+
+    .answer-box {
+      position: relative;
+      min-height: 178px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel-strong);
+      overflow: hidden;
+    }
+
+    .answer {
+      padding: 16px;
+    }
+
+    .answer strong {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .answer ul {
+      margin: 8px 0 0;
+      padding-left: 1.2em;
+    }
+
+    .answer-cover {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: linear-gradient(135deg, var(--panel-strong), var(--panel));
+      text-align: center;
+      transition: opacity 140ms ease, visibility 140ms ease;
+      z-index: 2;
+    }
+
+    .answer-cover strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 1.1rem;
+    }
+
+    .answer-cover span {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .is-revealed .answer-cover {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .visual-card {
+      margin-top: 12px;
+      min-height: 96px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background:
+        radial-gradient(circle at calc(50% + var(--dx, 0px)) calc(50% + var(--dy, 0px)), color-mix(in srgb, var(--accent) 28%, transparent), transparent 34%),
+        var(--panel-strong);
+      display: grid;
+      place-items: center;
+      transition: background-position 120ms ease;
+    }
+
+    .tilt-dot {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 16%, transparent);
+      transform: translate(var(--dx, 0px), var(--dy, 0px));
+      transition: transform 120ms ease;
+    }
+
+    .rating-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .log {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+      padding: 0;
+      list-style: none;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .privacy-list {
+      margin: 8px 0 0;
+      padding-left: 1.2em;
+      color: var(--muted);
+    }
+
+    @media (max-width: 360px) {
+      .app {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .actions,
+      .actions.three,
+      .rating-grid,
+      .sensor-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .term-name {
+        font-size: 1.55rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hero" aria-labelledby="appTitle">
+      <p class="eyebrow">Sensor Web App</p>
+      <h1 id="appTitle">FEL Tilt Memory Cards</h1>
+      <p class="lead">スマートフォンを基準姿勢から大きく傾けたときだけ、FE用語カードの答えを表示します。</p>
+    </section>
+
+    <section class="panel" aria-labelledby="sensorTitle">
+      <div class="panel-header">
+        <h2 id="sensorTitle">端末方向センサ</h2>
+        <span id="sensorStatus" class="status-pill">未開始</span>
+      </div>
+      <div class="actions">
+        <button id="startSensorButton" class="primary" type="button">センサを開始</button>
+        <button id="calibrateButton" type="button">基準姿勢を登録</button>
+      </div>
+      <div class="sensor-grid" aria-label="センサ値">
+        <div class="readout"><span>beta 前後</span><strong id="betaValue">--°</strong></div>
+        <div class="readout"><span>gamma 左右</span><strong id="gammaValue">--°</strong></div>
+        <div class="readout"><span>基準との差</span><strong id="tiltValue">0°</strong></div>
+        <div class="readout"><span>判定</span><strong id="decisionValue">隠す</strong></div>
+      </div>
+      <div class="gauge" aria-hidden="true"><span id="tiltGauge"></span><i></i></div>
+      <p id="sensorHint" class="hint">iPhone Safariでは「センサを開始」を押したあと、許可ダイアログで許可してください。拒否・非対応でも下の長押しボタンで確認できます。</p>
+      <div class="visual-card" aria-label="傾きの可視化">
+        <div id="tiltDot" class="tilt-dot"></div>
+      </div>
+    </section>
+
+    <section id="memoryCard" class="memory-card" aria-labelledby="termName">
+      <div class="card-header">
+        <span id="cardCounter" class="status-pill">1 / 6</span>
+        <span id="revealState" class="status-pill">答え非表示</span>
+      </div>
+      <h2 id="termName" class="term-name">2進数</h2>
+      <p id="question" class="question"></p>
+      <div id="answerBox" class="answer-box">
+        <div class="answer-cover" aria-hidden="true">
+          <div>
+            <strong>答えは隠れています</strong>
+            <span>スマホを約25度以上傾けて0.5秒保つか、長押しで表示します。</span>
+          </div>
+        </div>
+        <div class="answer">
+          <strong>説明</strong>
+          <p id="answerText"></p>
+          <ul id="answerPoints"></ul>
+        </div>
+      </div>
+      <div class="actions three">
+        <button id="prevButton" type="button">前へ</button>
+        <button id="manualRevealButton" class="primary" type="button">長押しで見る</button>
+        <button id="nextButton" type="button">次へ</button>
+      </div>
+      <p class="hint">次のカードへ進むと答えは自動で隠れます。</p>
+    </section>
+
+    <section class="panel" aria-labelledby="ratingTitle">
+      <h2 id="ratingTitle">自己確認</h2>
+      <p class="hint">答えを見たあと、自分の記憶状態をその場で記録できます。この記録は保存・送信しません。</p>
+      <div class="rating-grid">
+        <button data-rating="覚えていた" type="button">覚えていた</button>
+        <button data-rating="あいまい" type="button">あいまい</button>
+        <button data-rating="まだ" type="button">まだ</button>
+      </div>
+      <ul id="ratingLog" class="log" aria-live="polite"></ul>
+    </section>
+
+    <section class="panel" aria-labelledby="privacyTitle">
+      <h2 id="privacyTitle">安全性</h2>
+      <ul class="privacy-list">
+        <li>外部通信、アクセス解析、外部CDNは使いません。</li>
+        <li>カメラ、マイク、位置情報は使いません。</li>
+        <li>beta/gammaなどのセンサ値は画面表示と判定にだけ使い、保存しません。</li>
+      </ul>
+    </section>
+  </main>
+
+  <script>
+    const CARDS = [
+      {
+        term: '2進数',
+        question: '「2進数」とは何ですか。FEで問われるポイントを思い出してください。',
+        answer: '0と1だけで数を表す記数法です。各桁は右から2の0乗、2の1乗、2の2乗のように重みが増えます。',
+        points: ['コンピュータ内部のデータ表現の基本です。', '基数変換、ビット演算、アドレス計算の前提になります。']
+      },
+      {
+        term: '2の補数',
+        question: '「2の補数」は何のために使いますか。計算方法も思い出してください。',
+        answer: '符号付き整数を2進数で表す方法です。ビットを反転して1を加えることで、負の数を加算と同じ回路で扱いやすくします。',
+        points: ['最上位ビットは符号の意味を持ちます。', 'オーバーフローの判定とセットで問われやすいです。']
+      },
+      {
+        term: 'キャッシュメモリ',
+        question: '「キャッシュメモリ」はなぜ必要ですか。主記憶との関係を説明してください。',
+        answer: 'CPUと主記憶の速度差を埋める高速な記憶装置です。よく使うデータを近くに置き、平均アクセス時間を短くします。',
+        points: ['局所性、ヒット率、ミスペナルティが重要です。', 'ヒット率が高いほど平均アクセス時間は短くなります。']
+      },
+      {
+        term: 'パイプライン',
+        question: '「パイプライン」はCPUの処理をどう速くしますか。',
+        answer: '命令フェッチ、デコード、実行などの段階を重ね合わせ、複数命令を流れ作業のように処理する方式です。',
+        points: ['1命令の処理時間そのものより、単位時間あたりの命令数を増やします。', '分岐やデータ依存によるハザードが性能低下の原因になります。']
+      },
+      {
+        term: 'SQL',
+        question: '「SQL」は何をするための言語ですか。代表的な命令も思い出してください。',
+        answer: '関係データベースを操作するための言語です。SELECTで検索、INSERTで追加、UPDATEで更新、DELETEで削除します。',
+        points: ['表、行、列、主キー、外部キーと関連します。', 'WHERE、GROUP BY、ORDER BYの役割がよく問われます。']
+      },
+      {
+        term: 'ハッシュ',
+        question: '「ハッシュ」はどんな場面で使われますか。衝突とは何ですか。',
+        answer: 'データから固定長の値を計算し、検索、改ざん検知、パスワード保護などに使います。異なる入力が同じ値になることを衝突といいます。',
+        points: ['ハッシュ表では平均的に高速検索できます。', '暗号学的ハッシュでは一方向性や衝突耐性が重要です。']
+      }
+    ];
+
+    const SHOW_THRESHOLD = 25;
+    const HIDE_THRESHOLD = 10;
+    const HOLD_MS = 500;
+    const SAMPLE_LIMIT = 8;
+
+    const state = {
+      index: 0,
+      sensorListening: false,
+      sensorStatus: '未開始',
+      beta: null,
+      gamma: null,
+      baselineBeta: null,
+      baselineGamma: null,
+      tilt: 0,
+      samples: [],
+      holdStart: 0,
+      sensorReveal: false,
+      manualReveal: false,
+      rotationPauseUntil: 0,
+      ratings: []
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function formatDegree(value) {
+      return Number.isFinite(value) ? `${Math.round(value)}°` : '--°';
+    }
+
+    function smoothTilt(value) {
+      state.samples.push(value);
+      if (state.samples.length > SAMPLE_LIMIT) state.samples.shift();
+      return state.samples.reduce((sum, item) => sum + item, 0) / state.samples.length;
+    }
+
+    function currentCard() {
+      return CARDS[state.index];
+    }
+
+    function setStatus(text, active = false) {
+      state.sensorStatus = text;
+      $('sensorStatus').textContent = text;
+      $('sensorStatus').classList.toggle('on', active);
+    }
+
+    function renderCard() {
+      const card = currentCard();
+      $('cardCounter').textContent = `${state.index + 1} / ${CARDS.length}`;
+      $('termName').textContent = card.term;
+      $('question').textContent = card.question;
+      $('answerText').textContent = card.answer;
+      $('answerPoints').innerHTML = card.points.map((point) => `<li>${escapeHtml(point)}</li>`).join('');
+      $('prevButton').disabled = state.index === 0;
+      $('nextButton').disabled = state.index === CARDS.length - 1;
+      updateReveal();
+    }
+
+    function updateReveal() {
+      const revealed = state.manualReveal || state.sensorReveal;
+      $('answerBox').classList.toggle('is-revealed', revealed);
+      $('revealState').textContent = revealed ? '答え表示中' : '答え非表示';
+      $('revealState').classList.toggle('on', revealed);
+    }
+
+    function updateSensorView() {
+      $('betaValue').textContent = formatDegree(state.beta);
+      $('gammaValue').textContent = formatDegree(state.gamma);
+      $('tiltValue').textContent = formatDegree(state.tilt);
+      $('decisionValue').textContent = state.sensorReveal ? '表示' : '隠す';
+      $('tiltGauge').style.width = `${clamp((state.tilt / SHOW_THRESHOLD) * 100, 0, 100)}%`;
+      const dx = clamp((state.gamma || 0) * 1.1, -42, 42);
+      const dy = clamp((state.beta || 0) * 0.7, -34, 34);
+      $('tiltDot').style.setProperty('--dx', `${dx}px`);
+      $('tiltDot').style.setProperty('--dy', `${dy}px`);
+      $('sensorHint').textContent = state.baselineBeta === null
+        ? 'センサ開始後、自然な持ち方で「基準姿勢を登録」を押してください。'
+        : `表示しきい値は${SHOW_THRESHOLD}°、戻すしきい値は${HIDE_THRESHOLD}°です。表示まであと${Math.max(0, Math.round(SHOW_THRESHOLD - state.tilt))}°。`;
+      updateReveal();
+    }
+
+    function calibrate() {
+      if (!Number.isFinite(state.beta) || !Number.isFinite(state.gamma)) {
+        setStatus('値待ち');
+        $('sensorHint').textContent = 'センサ値を受け取ってから基準姿勢を登録できます。';
+        return;
+      }
+      state.baselineBeta = state.beta;
+      state.baselineGamma = state.gamma;
+      state.samples = [];
+      state.tilt = 0;
+      state.holdStart = 0;
+      state.sensorReveal = false;
+      setStatus('基準登録済み', state.sensorListening);
+      updateSensorView();
+    }
+
+    function handleOrientation(event) {
+      if (!state.sensorListening || document.hidden || Date.now() < state.rotationPauseUntil) return;
+      const beta = Number(event.beta);
+      const gamma = Number(event.gamma);
+      if (!Number.isFinite(beta) || !Number.isFinite(gamma)) {
+        setStatus('値なし');
+        return;
+      }
+      state.beta = beta;
+      state.gamma = gamma;
+      if (state.baselineBeta === null || state.baselineGamma === null) {
+        state.baselineBeta = beta;
+        state.baselineGamma = gamma;
+      }
+      const deltaBeta = beta - state.baselineBeta;
+      const deltaGamma = gamma - state.baselineGamma;
+      state.tilt = smoothTilt(Math.hypot(deltaBeta, deltaGamma));
+      const now = Date.now();
+      if (!state.sensorReveal) {
+        if (state.tilt >= SHOW_THRESHOLD) {
+          if (!state.holdStart) state.holdStart = now;
+          if (now - state.holdStart >= HOLD_MS) {
+            state.sensorReveal = true;
+            state.holdStart = 0;
+          }
+        } else {
+          state.holdStart = 0;
+        }
+      } else if (state.tilt <= HIDE_THRESHOLD) {
+        state.sensorReveal = false;
+        state.holdStart = 0;
+      }
+      updateSensorView();
+    }
+
+    async function startSensor() {
+      if (!('DeviceOrientationEvent' in window)) {
+        setStatus('非対応');
+        $('sensorHint').textContent = 'このブラウザでは端末方向センサを利用できません。長押しボタンで確認してください。';
+        return;
+      }
+      setStatus('許可確認中');
+      try {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const result = await DeviceOrientationEvent.requestPermission();
+          if (result !== 'granted') {
+            setStatus('拒否');
+            $('sensorHint').textContent = 'センサ利用が拒否されました。長押しボタンで同じ操作ができます。';
+            return;
+          }
+        }
+        if (!state.sensorListening) {
+          window.addEventListener('deviceorientation', handleOrientation, true);
+        }
+        state.sensorListening = true;
+        setStatus('センサON', true);
+        $('sensorHint').textContent = window.isSecureContext
+          ? '自然な持ち方で基準姿勢を登録してください。'
+          : 'HTTPSでない環境では端末によってセンサが動かない場合があります。';
+      } catch (error) {
+        setStatus('開始失敗');
+        $('sensorHint').textContent = `センサを開始できませんでした: ${error.message}`;
+      }
+    }
+
+    function moveCard(step) {
+      const next = clamp(state.index + step, 0, CARDS.length - 1);
+      if (next === state.index) return;
+      state.index = next;
+      state.sensorReveal = false;
+      state.manualReveal = false;
+      renderCard();
+      $('memoryCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function addRating(label) {
+      const entry = `${currentCard().term}: ${label}`;
+      state.ratings.unshift(entry);
+      state.ratings = state.ratings.slice(0, 5);
+      $('ratingLog').innerHTML = state.ratings.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]));
+    }
+
+    $('startSensorButton').addEventListener('click', startSensor);
+    $('calibrateButton').addEventListener('click', calibrate);
+    $('prevButton').addEventListener('click', () => moveCard(-1));
+    $('nextButton').addEventListener('click', () => moveCard(1));
+
+    const revealButton = $('manualRevealButton');
+    const showManual = (event) => {
+      event.preventDefault();
+      state.manualReveal = true;
+      state.sensorReveal = false;
+      updateReveal();
+    };
+    const hideManual = () => {
+      state.manualReveal = false;
+      updateReveal();
+    };
+    revealButton.addEventListener('pointerdown', showManual);
+    revealButton.addEventListener('pointerup', hideManual);
+    revealButton.addEventListener('pointercancel', hideManual);
+    revealButton.addEventListener('pointerleave', hideManual);
+    revealButton.addEventListener('contextmenu', (event) => event.preventDefault());
+
+    document.querySelectorAll('[data-rating]').forEach((button) => {
+      button.addEventListener('click', () => addRating(button.dataset.rating));
+    });
+
+    window.addEventListener('orientationchange', () => {
+      state.rotationPauseUntil = Date.now() + 900;
+      state.sensorReveal = false;
+      state.holdStart = 0;
+      updateReveal();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        state.sensorReveal = false;
+        state.manualReveal = false;
+        state.holdStart = 0;
+        updateReveal();
+      }
+    });
+
+    renderCard();
+    updateSensorView();
+  </script>
+</body>
+</html>
