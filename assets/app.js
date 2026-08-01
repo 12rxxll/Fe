@@ -429,7 +429,7 @@ function setup(){
   $('knowledgeExpandAllButton').addEventListener('click',()=>{const svc=getKnowledgeService();if(svc)svc.categories.filter(category=>!category.parentCategoryId).forEach(category=>knowledgeExpandedCategories.add(category.id));renderKnowledgeMap();});
   $('knowledgeCollapseAllButton').addEventListener('click',()=>{knowledgeExpandedCategories.clear();knowledgeCategoryLimits.clear();renderKnowledgeMap();});
   $('knowledgeResetViewButton').addEventListener('click',()=>{$('knowledgeSearch').value='';$('knowledgeSubjectFilter').value='';$('knowledgeStatusFilter').value='';$('knowledgeWritingFilter').value='';knowledgeCategoryLimits.clear();renderKnowledgeMap();});
-  $('focusRecommendationButton').addEventListener('click',()=>{const svc=getKnowledgeService(),rec=svc?.recommendNext(1)[0];if(rec){knowledgeMapMode='tree';selectedKnowledgeTermId=rec.term.id;expandKnowledgeCategoryPath(rec.term.categoryId,svc);renderKnowledgeMap();renderKnowledgeDetail(rec.term.id);saveKnowledgeUiState({save:true});}});
+  $('focusRecommendationButton').addEventListener('click',()=>{const svc=getKnowledgeService(),rec=svc?mapRecommendation(svc):null;if(rec){knowledgeMapMode='tree';selectedKnowledgeTermId=rec.term.id;expandKnowledgeCategoryPath(rec.term.categoryId,svc);renderKnowledgeMap();renderKnowledgeDetail(rec.term.id);saveKnowledgeUiState({save:true});}});
   $('prepareUnsubmittedNotesButton').addEventListener('click',()=>prepareNoteSubmission('unsubmitted'));
   $('prepareSelectedNoteButton').addEventListener('click',()=>prepareNoteSubmission('selected'));
   $('prepareChosenNotesButton').addEventListener('click',()=>prepareNoteSubmission('custom'));
@@ -573,8 +573,77 @@ function renderKnowledgeMap(){
   applyMemorizationCovers();
 }
 function renderKnowledgeRecommendation(svc){
-  const rec=svc.recommendNext(1)[0];
-  $('mapRecommendation').innerHTML=rec?`<button class="map-recommendation-card stack-item text-button" data-map-term-id="${esc(rec.term.id)}" type="button"><span class="stack-item-main"><strong>${esc(rec.term.name)}</strong><small>${esc(rec.reason)}・習熟度 ${rec.progress.masteryScore}%</small></span><span class="knowledge-node-marker">${esc(rec.progress.statusMarker)}</span></button>`:'<p class="empty compact">推薦できる用語はまだありません。</p>';
+  const rec=mapRecommendation(svc);
+  const label=rec?.kind==='continue'?'前回の続き':'おすすめ';
+  $('mapRecommendation').innerHTML=rec?`<button class="map-recommendation-card stack-item text-button" data-map-term-id="${esc(rec.term.id)}" type="button"><span class="stack-item-main"><strong>${esc(rec.term.name)}</strong><small><b>${label}</b>・${esc(rec.reason)}・習熟度 ${rec.progress.masteryScore}%</small></span><span class="knowledge-node-marker">${esc(rec.progress.statusMarker)}</span></button>`:'<p class="empty compact">推薦できる用語はまだありません。</p>';
+}
+function activityTimestamp(value){
+  if(value===null||value===undefined||value==='')return 0;
+  if(typeof value==='number'&&Number.isFinite(value))return value;
+  const text=String(value).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(text))return new Date(`${text}T12:00:00`).getTime()||0;
+  const ts=Date.parse(text);
+  return Number.isFinite(ts)?ts:0;
+}
+function orderedKnowledgeTerms(svc){
+  const ordered=[],seen=new Set();
+  const add=term=>{if(term&&!seen.has(term.id)){seen.add(term.id);ordered.push(term);}};
+  const visit=category=>{
+    svc.getTermsByCategory(category.id).forEach(add);
+    svc.getChildCategories(category.id).forEach(visit);
+  };
+  svc.getSubjectTree().forEach(node=>node.categories.forEach(visit));
+  svc.terms.forEach(add);
+  return ordered;
+}
+function latestKnowledgeActivity(svc){
+  const candidates=[];
+  const add=(term,ts,source)=>{
+    if(!term)return;
+    const value=activityTimestamp(ts);
+    if(value>0)candidates.push({term,ts:value,source});
+  };
+  Object.entries(state.termNotes||{}).forEach(([termId,record])=>{
+    const term=svc.getTerm(termId),note=migrateTermNoteRecord(record);
+    if(compactNoteLength(note.content)>0)add(term,note.updatedAt,'記述');
+  });
+  (state.attempts||[]).forEach(attempt=>{
+    svc.getTermsForAppTermId(attempt.id).forEach(term=>add(term,attempt.ts||attempt.date,'問題演習'));
+  });
+  (state.subjectA?.attempts||[]).forEach(attempt=>{
+    svc.getQuestionTermLinks(attempt.id).forEach(link=>add(link.term,attempt.ts||attempt.date,'科目A演習'));
+  });
+  Object.entries(state.terms||{}).forEach(([appTermId,termState])=>{
+    const record=migrateTermState(termState);
+    const ts=Math.max(activityTimestamp(record.updatedAt),activityTimestamp(record.lastCorrect),activityTimestamp(record.lastWrong),activityTimestamp(record.last),activityTimestamp(record.learnedAt));
+    svc.getTermsForAppTermId(appTermId).forEach(term=>add(term,ts,'学習履歴'));
+  });
+  candidates.sort((a,b)=>b.ts-a.ts);
+  if(candidates.length)return candidates[0];
+  const selected=selectedKnowledgeTermId||uiState().map.selectedTermId;
+  const selectedTerm=selected?svc.getTerm(selected):null;
+  return selectedTerm?{term:selectedTerm,ts:0,source:'表示中'}:null;
+}
+function continuationAfterLatest(svc,latest){
+  const ordered=orderedKnowledgeTerms(svc);
+  if(!ordered.length||!latest?.term)return null;
+  const index=ordered.findIndex(term=>term.id===latest.term.id);
+  if(index<0)return null;
+  for(let offset=1;offset<ordered.length;offset++){
+    const term=ordered[(index+offset)%ordered.length],progress=svc.progressForTerm(term.id);
+    if(progress.status!=='mastered')return {term,progress,wrapped:index+offset>=ordered.length};
+  }
+  const term=ordered[index];
+  return {term,progress:svc.progressForTerm(term.id),wrapped:false};
+}
+function mapRecommendation(svc){
+  const latest=latestKnowledgeActivity(svc),continuation=continuationAfterLatest(svc,latest);
+  if(continuation){
+    const reason=continuation.term.id===latest.term.id?`${latest.source}の続きを確認します`:`前回学習した「${latest.term.name}」の次です`;
+    return Object.assign({kind:'continue',reason},continuation);
+  }
+  const fallback=svc.recommendNext(1)[0];
+  return fallback?Object.assign({kind:'recommended'},fallback):null;
 }
 function renderKnowledgeSubject(subject,categories,svc){
   const children=categories.map(category=>renderKnowledgeCategory(category,svc,0)).filter(Boolean).join('');
