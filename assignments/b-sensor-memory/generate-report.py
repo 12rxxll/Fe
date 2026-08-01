@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageOps
 from pypdf import PdfReader
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -24,22 +24,23 @@ def make_screenshot() -> None:
     if SOURCE_SCREENSHOT.exists():
         img = Image.open(SOURCE_SCREENSHOT).convert("RGB")
         img.thumbnail((720, 1440), Image.Resampling.LANCZOS)
+        img = ImageOps.grayscale(img).convert("RGB")
         img.save(SCREENSHOT_PATH)
     elif not SCREENSHOT_PATH.exists():
         Image.new("RGB", (590, 1280), "#202123").save(SCREENSHOT_PATH)
 
 
 def make_pdf() -> None:
-    pdfmetrics.registerFont(TTFont("Meiryo", r"C:\Windows\Fonts\meiryo.ttc"))
-    pdfmetrics.registerFont(TTFont("MeiryoBold", r"C:\Windows\Fonts\meiryob.ttc"))
+    pdfmetrics.registerFont(TTFont("ReportGothic", r"C:\Windows\Fonts\BIZ-UDGothicB.ttc"))
+    pdfmetrics.registerFont(TTFont("ReportMincho", r"C:\Windows\Fonts\BIZ-UDMinchoM.ttc"))
 
     styles = {
-        "title": ParagraphStyle("title", fontName="MeiryoBold", fontSize=16, leading=20, spaceAfter=6),
-        "subtitle": ParagraphStyle("subtitle", fontName="Meiryo", fontSize=9.5, leading=13, textColor=colors.HexColor("#4b5563"), spaceAfter=8),
-        "h": ParagraphStyle("h", fontName="MeiryoBold", fontSize=11.2, leading=14, spaceBefore=5, spaceAfter=3),
-        "body": ParagraphStyle("body", fontName="Meiryo", fontSize=8.6, leading=11.9, wordWrap="CJK"),
-        "small": ParagraphStyle("small", fontName="Meiryo", fontSize=7.8, leading=10.2, wordWrap="CJK", textColor=colors.HexColor("#374151")),
-        "warn": ParagraphStyle("warn", fontName="MeiryoBold", fontSize=8.3, leading=10.9, wordWrap="CJK", textColor=colors.HexColor("#b45309")),
+        "title": ParagraphStyle("title", fontName="ReportGothic", fontSize=13, leading=17, spaceAfter=5, textColor=colors.black),
+        "subtitle": ParagraphStyle("subtitle", fontName="ReportMincho", fontSize=10.5, leading=14, textColor=colors.black, spaceAfter=7),
+        "h": ParagraphStyle("h", fontName="ReportGothic", fontSize=13, leading=17, spaceBefore=5, spaceAfter=3, textColor=colors.black),
+        "body": ParagraphStyle("body", fontName="ReportMincho", fontSize=10.5, leading=14.5, wordWrap="CJK", textColor=colors.black),
+        "small": ParagraphStyle("small", fontName="ReportMincho", fontSize=10.5, leading=14.5, wordWrap="CJK", textColor=colors.black),
+        "warn": ParagraphStyle("warn", fontName="ReportMincho", fontSize=10.5, leading=14.5, wordWrap="CJK", textColor=colors.black),
     }
 
     def p(text, style="body"):
@@ -50,11 +51,14 @@ def make_pdf() -> None:
         table.setStyle(
             TableStyle(
                 [
-                    ("FONTNAME", (0, 0), (-1, -1), "Meiryo"),
+                    ("FONTNAME", (0, 0), (-1, -1), "ReportMincho"),
+                    ("FONTNAME", (0, 0), (0, -1), "ReportGothic"),
+                    ("FONTSIZE", (0, 0), (0, -1), 13),
+                    ("LEADING", (0, 0), (0, -1), 17),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eef2f0")),
-                    ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
-                    ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d1d5db")),
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                    ("BOX", (0, 0), (-1, -1), 0.6, colors.black),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.black),
                     ("LEFTPADDING", (0, 0), (-1, -1), 6),
                     ("RIGHTPADDING", (0, 0), (-1, -1), 6),
                     ("TOPPADDING", (0, 0), (-1, -1), 5),
@@ -91,13 +95,13 @@ def make_pdf() -> None:
                     p("公開アプリ: https://12rxxll.github.io/Fe/<br/>GitHub: https://github.com/12rxxll/Fe"),
                 ],
             ],
-            [27 * mm, 141 * mm],
+            [34 * mm, 134 * mm],
         ),
         Spacer(1, 5),
         p("画面・動作", "h"),
     ]
 
-    screenshot = RLImage(str(SCREENSHOT_PATH), width=58 * mm, height=126 * mm)
+    screenshot = RLImage(str(SCREENSHOT_PATH), width=45 * mm, height=98 * mm)
     story.append(
         Table(
             [
@@ -106,7 +110,7 @@ def make_pdf() -> None:
                     p("マップ画面に「暗記モード」「センサ操作」「長押しで答えを見る」「すべて表示」「センサ再調整」を配置している。暗記モードをONにすると、用語カードの問いは表示したまま、自分の記述だけを隠す。センサ操作をONにすると、センサ状態パネルに「センサ」「基準との差」「状態」「表示まで」が表示される。端末を傾けると、基準との差と表示判定が変化する。手動操作として、長押し中だけ答えを見るボタンも用意している。<br/><br/>左図は既存アプリのマップ画面で暗記モードをONにした状態である。"),
                 ]
             ],
-            colWidths=[63 * mm, 105 * mm],
+            colWidths=[50 * mm, 118 * mm],
             style=TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]),
         )
     )
@@ -130,7 +134,7 @@ def make_pdf() -> None:
                 ["提出方法", p("公開アプリURLまたはGitHub URLを提出する。公開アプリ: https://12rxxll.github.io/Fe/ / GitHub: https://github.com/12rxxll/Fe")],
                 ["安全性", p("外部API、外部CDN、アクセス解析、カメラ、マイク、位置情報は暗記モードで使用していない。beta/gammaなどのセンサ値は画面表示と判定にだけ使い、ブラウザ内やサーバには保存しない。")],
             ],
-            [30 * mm, 138 * mm],
+            [43 * mm, 125 * mm],
         ),
         Spacer(1, 7),
         p("提出前チェック", "h"),
