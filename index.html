@@ -9,7 +9,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./assets/styles.css?v=2.1.3">
+  <link rel="stylesheet" href="./assets/styles.css?v=2.1.4">
   <title>FE Learning OS</title>
 </head>
 <body>
@@ -138,6 +138,20 @@
         <div id="writingTestSummary" class="learning-status"></div>
         <div id="writingSubjectSummary" class="analytics-list"></div>
       </section>
+      <section class="panel map-chatgpt-panel chatgpt-review-panel">
+        <div class="panel-title-row"><h3>ChatGPT確認</h3><strong id="noteBatchReadyCount" class="subtle">0語</strong></div>
+        <p id="noteBatchSummary" class="help"></p>
+        <label class="checkbox-row"><input id="includeSubmittedNotes" type="checkbox">前回送信済みの同一内容も含める</label>
+        <div class="knowledge-inline-actions">
+          <button id="prepareUnsubmittedNotesButton" class="primary" type="button">未送信をまとめる</button>
+          <button id="prepareSelectedNoteButton" class="secondary" type="button">選択中をまとめる</button>
+        </div>
+        <div id="chatgptBatchHistory" class="stack-list compact"></div>
+        <div class="chatgpt-review-section">
+          <div class="panel-title-row compact"><h4>確認結果を反映</h4><span class="subtle">カード外で管理</span></div>
+          <div id="chatgptReviewList" class="chatgpt-review-list"></div>
+        </div>
+      </section>
       <section class="panel"><h3>最近14日間の学習量</h3><div id="progressActivityChart" class="activity-chart" aria-label="最近14日間の解答数"></div><p id="progressActivitySummary" class="help"></p></section>
       <section class="panel"><h3>苦手分野</h3><div id="weakAreaSummary" class="stack-list"></div></section>
       <section class="panel"><h3>分野別成績</h3><div id="categoryAnalytics" class="analytics-list"></div></section>
@@ -198,17 +212,6 @@
             <div class="sensor-gauge" aria-hidden="true"><span id="memorizationTiltGauge"></span><i></i></div>
           </div>
         </div>
-      </section>
-
-      <section class="panel map-chatgpt-panel">
-        <div class="panel-title-row"><h3>記述をChatGPTで確認</h3><strong id="noteBatchReadyCount" class="subtle">0語</strong></div>
-        <p id="noteBatchSummary" class="help"></p>
-        <label class="checkbox-row"><input id="includeSubmittedNotes" type="checkbox">前回送信済みの同一内容も含める</label>
-        <div class="knowledge-inline-actions">
-          <button id="prepareUnsubmittedNotesButton" class="primary" type="button">未送信をまとめる</button>
-          <button id="prepareSelectedNoteButton" class="secondary" type="button">選択中をまとめる</button>
-        </div>
-        <div id="chatgptBatchHistory" class="stack-list compact"></div>
       </section>
 
       <div class="panel controls-panel map-controls">
@@ -284,10 +287,10 @@
         <div class="button-stack"><button id="exportButton" class="secondary full" type="button">バックアップを書き出す</button><label class="file-button secondary full">バックアップを読み込む<input id="importInput" type="file" accept="application/json,.json"></label><button id="resetButton" class="danger full" type="button">学習データを削除</button></div>
       </section>
       <section class="panel">
-        <h3>無料AI連携</h3><p class="help">API料金を使わず、選択中の用語をChatGPTへ質問する文章をコピーできます。</p>
+        <h3>無料AI連携</h3><p class="help">API料金を使わず、今日の弱点整理に使う質問文をコピーできます。</p>
         <button id="copyGeneralPromptButton" class="secondary full" type="button">今日の弱点を整理する質問文をコピー</button>
       </section>
-      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.1.3</p><p>オフライン対応・GitHub Pages対応</p></section>
+      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.1.4</p><p>オフライン対応・GitHub Pages対応</p></section>
     </section>
   </main>
 
@@ -311,6 +314,6 @@
   <script src="./assets/subject-a-data.js"></script>
   <script src="./assets/knowledge-map-data.js"></script>
   <script src="./assets/knowledge-map.js"></script>
-  <script src="./assets/app.js?v=2.1.3"></script>
+  <script src="./assets/app.js?v=2.1.4"></script>
 </body>
 </html>

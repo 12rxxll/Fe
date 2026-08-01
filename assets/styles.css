@@ -1654,6 +1654,10 @@ textarea {
   padding: 10px;
 }
 
+.knowledge-detail-accordion-body[hidden] {
+  display: none !important;
+}
+
 .knowledge-accordion-grid,
 .knowledge-memory-controls,
 .knowledge-review-grid {
@@ -1732,6 +1736,49 @@ textarea {
 .map-chatgpt-panel {
   display: grid;
   gap: 10px;
+}
+
+.chatgpt-review-panel {
+  gap: 12px;
+}
+
+.chatgpt-review-section {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.chatgpt-review-list {
+  display: grid;
+  gap: 9px;
+}
+
+.chatgpt-review-item {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--panel-2);
+  padding: 10px;
+}
+
+.chatgpt-review-item strong,
+.chatgpt-review-item small {
+  display: block;
+}
+
+.chatgpt-review-item small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.chatgpt-review-item label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .memorization-panel {
@@ -1999,6 +2046,31 @@ textarea {
   line-height: 1.42;
 }
 
+.knowledge-note-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+
+.knowledge-note-title-row strong,
+.knowledge-note-title-row small {
+  display: block;
+  min-width: 0;
+}
+
+.knowledge-note-title-row strong {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.knowledge-note-title-row small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .note-section-head {
   display: flex;
   align-items: center;
@@ -2033,6 +2105,19 @@ textarea {
   gap: 7px;
   border-top: 0;
   padding-top: 0;
+}
+
+.map-detail-section.knowledge-note-section {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.knowledge-note-section > h4,
+.knowledge-note-section > h5 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .note-review-grid {
