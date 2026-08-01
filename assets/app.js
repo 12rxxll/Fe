@@ -7,11 +7,12 @@ const KNOWLEDGE_TERMS = knowledgeMapTermsToGlossary(KMAP_DATA);
 const TERMS = mergeTerms(CORE_TERMS, SYLLABUS_TERMS, KNOWLEDGE_TERMS);
 const SUBJECT_A = Array.isArray(window.FE_SUBJECT_A_QUESTIONS) ? window.FE_SUBJECT_A_QUESTIONS : [];
 const STORAGE_KEY = 'fe-learning-os-v2';
-const DATA_SCHEMA = 13;
+const DATA_SCHEMA = 14;
 const DAY = 86400000;
 const NOTE_MIN_CHARS = 10;
 const NOTE_BATCH_MAX_TERMS = 20;
 const NOTE_BATCH_MAX_CHARS = 8000;
+const NOTE_REVISION_HISTORY_LIMIT = 10;
 const CHATGPT_URL = 'https://chatgpt.com/';
 const MEMORIZATION_DEFAULTS = {
   enabled:false,
@@ -26,7 +27,7 @@ const defaultMemorizationSettings = () => Object.assign({}, MEMORIZATION_DEFAULT
 const DETAIL_ACCORDION_KEYS = ['info','review','progress'];
 const isDetailAccordionKey = key => DETAIL_ACCORDION_KEYS.includes(String(key));
 const defaultUiState = () => ({quizSetup:{source:'terms',mode:'recommended',system:'',length:'10',type:'mixed'},map:{scrollY:0,selectedTermId:'',mapMode:'overview',expandedRelatedTermIds:[],openDetailAccordions:[]}});
-const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system',memorization:defaultMemorizationSettings()},terms:{},knowledgeNotes:{},termNotes:{},memorizationRatings:{},quizDraft:null,uiState:defaultUiState(),chatgptSubmissionBatches:[],attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
+const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system',memorization:defaultMemorizationSettings()},terms:{},knowledgeNotes:{},termNotes:{},noteRevisionHistory:{},memorizationRatings:{},quizDraft:null,uiState:defaultUiState(),chatgptSubmissionBatches:[],attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
 let needsMigrationSave = false;
 let state = loadState();
 let currentView = 'home';
@@ -46,6 +47,9 @@ let activeKnowledgeNoteTermId = '';
 let knowledgeNoteComposing = false;
 let knowledgeCompositionBlockUntil = 0;
 let pendingNoteSubmission = null;
+let chatgptReviewFilter = 'all';
+let expandedChatgptReviewTermId = '';
+let pendingFeedbackApplyTermId = '';
 let memorizationRotationPauseUntil = 0;
 let knowledgeUiSaveTimer = null;
 const memorizationRuntime = {
@@ -122,8 +126,23 @@ function knowledgeMapTermsToGlossary(data){
 function getSystems(){return unique(TERMS.map(t=>t['系']));}
 function emptyTermState(){return {mastery:0,correct:0,wrong:0,knowledgeCorrect:0,knowledgeWrong:0,streak:0,consecutiveIncorrect:0,ease:2.5,interval:0,repetitions:0,due:null,nextReview:null,last:null,lastCorrect:null,lastWrong:null,learnedAt:null,updatedAt:null,reviewPriority:0,bookmark:false,note:'',weakReasons:[]};}
 function migrateTermState(value={}){const s=Object.assign(emptyTermState(),value||{});s.mastery=clamp(Number(s.mastery)||0,0,5);s.correct=Math.max(0,Number(s.correct)||0);s.wrong=Math.max(0,Number(s.wrong)||0);s.knowledgeCorrect=Math.max(0,Number(s.knowledgeCorrect)||0);s.knowledgeWrong=Math.max(0,Number(s.knowledgeWrong)||0);s.streak=Math.max(0,Number(s.streak)||0);s.consecutiveIncorrect=Math.max(0,Number(s.consecutiveIncorrect)||0);s.ease=Math.max(1.3,Number(s.ease)||2.5);s.interval=Math.max(0,Number(s.interval)||0);s.repetitions=Math.max(0,Number(s.repetitions)||0);s.due=s.due||s.nextReview||null;s.nextReview=s.nextReview||s.due||null;s.last=s.last||s.lastCorrect||s.lastWrong||null;s.reviewPriority=Math.max(0,Number(s.reviewPriority)||0);s.weakReasons=Array.isArray(s.weakReasons)?s.weakReasons:[];return s;}
-function emptyTermNoteRecord(content=''){return {content:String(content||''),updatedAt:null,writingStatus:'empty',reviewStatus:'unreviewed',reviewedAt:null,lastSubmittedContent:'',lastSubmittedHash:'',lastSubmittedAt:null,lastSubmissionBatchId:null,feedbackMemo:''};}
-function migrateTermNoteRecord(value={}){const s=typeof value==='string'?{content:value}:Object.assign(emptyTermNoteRecord(),value||{});s.content=String(s.content||'');s.updatedAt=s.updatedAt||null;s.writingStatus=s.writingStatus||'empty';s.reviewStatus=s.reviewStatus||'unreviewed';s.reviewedAt=s.reviewedAt||null;s.lastSubmittedContent=String(s.lastSubmittedContent||'');s.lastSubmittedHash=String(s.lastSubmittedHash||'');s.lastSubmittedAt=s.lastSubmittedAt||null;s.lastSubmissionBatchId=s.lastSubmissionBatchId||null;s.feedbackMemo=String(s.feedbackMemo||'');return s;}
+function emptyTermNoteRecord(content=''){return {content:String(content||''),updatedAt:null,writingStatus:'empty',reviewStatus:'unreviewed',reviewedAt:null,lastSubmittedContent:'',lastSubmittedHash:'',lastSubmittedAt:null,lastSubmissionBatchId:null,feedbackMemo:'',feedbackAppliedAt:null,feedbackApplyMode:'',feedbackAppliedContent:''};}
+function migrateTermNoteRecord(value={}){const s=typeof value==='string'?{content:value}:Object.assign(emptyTermNoteRecord(),value||{});s.content=String(s.content||'');s.updatedAt=s.updatedAt||null;s.writingStatus=s.writingStatus||'empty';s.reviewStatus=['unreviewed','correct','needs_fix','insufficient','needs_recheck'].includes(s.reviewStatus)?s.reviewStatus:'unreviewed';s.reviewedAt=s.reviewedAt||null;s.lastSubmittedContent=String(s.lastSubmittedContent||'');s.lastSubmittedHash=String(s.lastSubmittedHash||'');s.lastSubmittedAt=s.lastSubmittedAt||null;s.lastSubmissionBatchId=s.lastSubmissionBatchId||null;s.feedbackMemo=String(s.feedbackMemo||'');s.feedbackAppliedAt=s.feedbackAppliedAt||null;s.feedbackApplyMode=['append','replace','merge','undo'].includes(s.feedbackApplyMode)?s.feedbackApplyMode:'';s.feedbackAppliedContent=String(s.feedbackAppliedContent||'');return s;}
+function migrateNoteRevisionHistory(value={}){
+  const raw=value&&typeof value==='object'?value:{},out={};
+  Object.keys(raw).forEach(termId=>{
+    const rows=Array.isArray(raw[termId])?raw[termId]:[];
+    out[termId]=rows.map(item=>({
+      id:String(item?.id||`note-revision-${Date.now().toString(36)}`),
+      changedAt:item?.changedAt||null,
+      previousContent:String(item?.previousContent||''),
+      newContent:String(item?.newContent||''),
+      source:String(item?.source||'chatgpt-feedback'),
+      applyMode:String(item?.applyMode||'')
+    })).filter(item=>item.changedAt).slice(0,NOTE_REVISION_HISTORY_LIMIT);
+  });
+  return out;
+}
 function migrateSubmissionBatch(value={}){const s=Object.assign({id:'',createdAt:null,termIds:[],termNames:[],category:'',firstTerm:'',lastTerm:'',itemCount:0,totalCharacters:0,promptHash:'',status:'prepared'},value||{});s.termIds=Array.isArray(s.termIds)?s.termIds.map(String):[];s.termNames=Array.isArray(s.termNames)?s.termNames.map(String):[];s.itemCount=Math.max(0,Number(s.itemCount)||s.termIds.length);s.totalCharacters=Math.max(0,Number(s.totalCharacters)||0);s.status=String(s.status||'prepared');return s;}
 function emptyMemorizationRating(){return {lastRating:null,ratedAt:null,knownCount:0,unsureCount:0,unknownCount:0};}
 function migrateMemorizationRating(value={}){
@@ -204,7 +223,7 @@ function migrateMemorizationSettings(value={}){
   s.panelVisible=s.panelVisible!==false;
   return s;
 }
-function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.settings=s.settings&&typeof s.settings==='object'?Object.assign(defaultState().settings,s.settings||{}):defaultState().settings;s.settings.memorization=migrateMemorizationSettings(s.settings.memorization);s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});s.memorizationRatings=s.memorizationRatings&&typeof s.memorizationRatings==='object'?s.memorizationRatings:{};Object.keys(s.memorizationRatings).forEach(id=>{s.memorizationRatings[id]=migrateMemorizationRating(s.memorizationRatings[id]);});s.quizDraft=migrateQuizDraft(s.quizDraft);s.uiState=migrateUiState(s.uiState);s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches.map(migrateSubmissionBatch):[];s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
+function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.settings=s.settings&&typeof s.settings==='object'?Object.assign(defaultState().settings,s.settings||{}):defaultState().settings;s.settings.memorization=migrateMemorizationSettings(s.settings.memorization);s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});s.noteRevisionHistory=migrateNoteRevisionHistory(s.noteRevisionHistory);s.memorizationRatings=s.memorizationRatings&&typeof s.memorizationRatings==='object'?s.memorizationRatings:{};Object.keys(s.memorizationRatings).forEach(id=>{s.memorizationRatings[id]=migrateMemorizationRating(s.memorizationRatings[id]);});s.quizDraft=migrateQuizDraft(s.quizDraft);s.uiState=migrateUiState(s.uiState);s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches.map(migrateSubmissionBatch):[];s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
 function termStateNeedsMigration(s){return !('nextReview' in s)||!('lastCorrect' in s)||!('lastWrong' in s)||!('reviewPriority' in s)||!('knowledgeCorrect' in s)||!('knowledgeWrong' in s)||!('consecutiveIncorrect' in s)||!('weakReasons' in s);}
 function readTermState(id){id=String(id);if(!state.terms[id])return emptyTermState();if(termStateNeedsMigration(state.terms[id]))state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
 function getTermState(id){id=String(id);if(!state.terms[id]) state.terms[id]=emptyTermState();else if(termStateNeedsMigration(state.terms[id])) state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
@@ -341,7 +360,7 @@ function registerServiceWorker(){if(!('serviceWorker' in navigator)||!location.p
 
 function setup(){
   $('todayLabel').textContent=new Intl.DateTimeFormat('ja-JP',{month:'long',day:'numeric',weekday:'short'}).format(new Date());
-  getSystems().forEach(s=>{$('quizSystem').add(new Option(s,s));$('knowledgeSubjectFilter').add(new Option(s,s));});
+  getSystems().forEach(s=>{$('quizSystem').add(new Option(s,s));$('knowledgeSubjectFilter').add(new Option(s,s));$('reviewSystemFilter')?.add(new Option(s,s));});
   applyQuizSetupUiState();
   syncNavigationState();syncReviewTabs();
   $$('[data-nav]').forEach(b=>b.addEventListener('click',()=>navTo(b.dataset.nav)));
@@ -368,8 +387,15 @@ function setup(){
   bindMemorizationControls();
   $('startQuizButton').addEventListener('click',()=>startQuiz());
   $('quizDraftPanel').addEventListener('click',handleQuizDraftPanelClick);
-  $('startReviewButton').addEventListener('click',startDueReview);
+  $('startReviewButton').addEventListener('click',()=>startReviewMode('due'));
+  $('startDueReviewButton').addEventListener('click',()=>startReviewMode('due'));
+  $('startWrongReviewButton').addEventListener('click',()=>startReviewMode('wrong'));
+  $('startWeakReviewButton').addEventListener('click',()=>startReviewMode('weak'));
+  $('resumeReviewButton').addEventListener('click',resumeReviewFromReviewScreen);
+  $('openWritingReviewButton').addEventListener('click',()=>{qs('#writingReviewPanel')?.classList.remove('hidden');qs('#writingReviewPanel')?.scrollIntoView({behavior:'smooth',block:'start'});});
+  $('reviewSystemFilter').addEventListener('change',renderReview);
   $$('[data-review-filter]').forEach(b=>b.addEventListener('click',()=>{reviewFilter=b.dataset.reviewFilter;syncReviewTabs();renderReview();}));
+  $$('[data-chatgpt-review-filter]').forEach(b=>b.addEventListener('click',()=>{chatgptReviewFilter=b.dataset.chatgptReviewFilter||'all';syncChatGPTReviewFilterTabs();renderChatGPTReviewList(getKnowledgeService());}));
   $('saveSettingsButton').addEventListener('click',saveSettings);
   $('exportButton').addEventListener('click',exportData);
   $('importInput').addEventListener('change',importData);
@@ -527,6 +553,18 @@ function knowledgeWritingQuestion(term,svc){
   return `『${term.name}』とは何ですか？ FEで問われるポイントを、自分の言葉で説明してください。`;
 }
 function noteReviewOption(value,label,current){return `<option value="${esc(value)}" ${current===value?'selected':''}>${esc(label)}</option>`;}
+function noteReviewOptions(current){
+  const extra=current==='needs_recheck'?noteReviewOption('needs_recheck','再確認待ち',current):'';
+  return `${noteReviewOption('unreviewed','未確認',current)}${noteReviewOption('correct','正しい',current)}${noteReviewOption('needs_fix','一部修正が必要',current)}${noteReviewOption('insufficient','理解不足',current)}${extra}`;
+}
+function noteReviewDisplay(record){
+  const status=record?.reviewStatus||'unreviewed',applied=Boolean(record?.feedbackAppliedAt);
+  if(status==='correct')return {key:'confirmed',label:'確認済み',className:'good'};
+  if(status==='needs_fix')return {key:'needs_fix',label:applied?'要修正・反映済み':'要修正',className:'bad'};
+  if(status==='insufficient')return {key:'insufficient',label:applied?'再学習・反映済み':'再学習',className:'bad'};
+  if(status==='needs_recheck')return {key:'needs_recheck',label:'再確認待ち',className:''};
+  return {key:'unreviewed',label:'未確認',className:'gray'};
+}
 function getMemorizationRatingRecord(termId,create=false){
   termId=String(termId||'');
   if(!state.memorizationRatings||typeof state.memorizationRatings!=='object')state.memorizationRatings={};
@@ -763,6 +801,7 @@ function writingStatusForRecord(record){
   if(record.reviewStatus==='correct')return {key:'confirmed',label:'確認済み',score:100,className:'good'};
   if(record.reviewStatus==='needs_fix')return {key:'revise',label:'要修正',score:65,className:'bad'};
   if(record.reviewStatus==='insufficient')return {key:'insufficient',label:'理解不足',score:40,className:'bad'};
+  if(record.reviewStatus==='needs_recheck')return {key:'written',label:'再確認待ち',score:70,className:''};
   if(record.lastSubmittedHash&&record.lastSubmittedHash===hash)return {key:'pending',label:'確認待ち',score:75,className:''};
   if(len>=NOTE_MIN_CHARS)return {key:'written',label:'記入済み',score:55,className:'good'};
   return {key:'short',label:'下書き',score:25,className:'gray'};
@@ -832,6 +871,44 @@ function noteSubmissionStats(svc=getKnowledgeService()){
     else stats.updated++;
     return stats;
   },{neverSubmitted:0,updated:0,submittedSame:0,sendable:0});
+}
+function chatGPTReviewRows(svc=getKnowledgeService()){
+  if(!svc)return [];
+  return svc.terms.map(term=>{
+    const record=getTermNoteRecord(term,false),writing=writingStatusForRecord(record),content=normalizeNoteContent(record.content),hash=simpleHash(content),last=String(record.lastSubmittedHash||''),review=noteReviewDisplay(record),category=svc.getCategoryPath(term.categoryId).map(item=>item.name).join(' > ')||'知識マップ';
+    const sendable=compactNoteLength(content)>=NOTE_MIN_CHARS,updated=Boolean(last&&hash!==last),neverSubmitted=sendable&&!last,pending=Boolean(last&&hash===last&&(record.reviewStatus==='unreviewed'||record.reviewStatus==='needs_recheck'));
+    let filterKey='all';
+    if(neverSubmitted||updated)filterKey='unsubmitted';
+    else if(pending)filterKey='pending';
+    else if(record.reviewStatus==='needs_fix'||record.reviewStatus==='insufficient')filterKey='needs_fix';
+    else if(record.reviewStatus==='correct')filterKey='confirmed';
+    return {term,record,writing,content,hash,last,review,category,sendable,updated,neverSubmitted,pending,filterKey,hasFeedback:Boolean(normalizeNoteContent(record.feedbackMemo)),applied:Boolean(record.feedbackAppliedAt)};
+  }).filter(row=>row.content&&(row.sendable||row.last||row.record.reviewStatus!=='unreviewed'||row.hasFeedback));
+}
+function chatGPTReviewStats(svc=getKnowledgeService()){
+  return chatGPTReviewRows(svc).reduce((stats,row)=>{
+    if(row.neverSubmitted||row.updated)stats.unsubmitted++;
+    if(row.pending)stats.pending++;
+    if(row.record.reviewStatus==='needs_fix'||row.record.reviewStatus==='insufficient')stats.needsFix++;
+    if(row.record.reviewStatus==='correct')stats.confirmed++;
+    if(row.record.reviewStatus==='needs_recheck')stats.needsRecheck++;
+    return stats;
+  },{unsubmitted:0,pending:0,needsFix:0,confirmed:0,needsRecheck:0});
+}
+function syncChatGPTReviewFilterTabs(){
+  $$('[data-chatgpt-review-filter]').forEach(button=>{
+    const active=(button.dataset.chatgptReviewFilter||'all')===chatgptReviewFilter;
+    button.classList.toggle('active',active);
+    button.setAttribute('aria-selected',active?'true':'false');
+  });
+}
+function chatGPTReviewFilterMatch(row){
+  if(chatgptReviewFilter==='all')return true;
+  if(chatgptReviewFilter==='unsubmitted')return row.neverSubmitted||row.updated;
+  if(chatgptReviewFilter==='pending')return row.pending||row.record.reviewStatus==='needs_recheck';
+  if(chatgptReviewFilter==='needs_fix')return row.record.reviewStatus==='needs_fix'||row.record.reviewStatus==='insufficient';
+  if(chatgptReviewFilter==='confirmed')return row.record.reviewStatus==='correct';
+  return true;
 }
 function selectedChatGPTSubject(){return $('chatgptSubjectFilter')?.value||'';}
 function termsForChatGPTScope(scope,svc){
@@ -967,8 +1044,12 @@ function renderNoteSubmissionPanel(svc=getKnowledgeService()){
   if(!$('noteBatchReadyCount')||!svc)return;
   const include=$('includeSubmittedNotes')?.checked||false,unsubmitted=collectNoteSubmissionItems('unsubmitted',include,svc),deduped=collectNoteSubmissionItems('unsubmitted',false,svc),submitted=collectNoteSubmissionItems('unsubmitted',true,svc).sendableCount-deduped.items.length,selected=collectNoteSubmissionItems('selected',include,svc);
   const subject=collectNoteSubmissionItems('subject',include,svc),custom=collectNoteSubmissionItems('custom',include,svc),stats=noteSubmissionStats(svc);
+  const reviewStats=chatGPTReviewStats(svc);
   $('noteBatchReadyCount').textContent=`${unsubmitted.items.length}語`;
   $('chatgptBatchStats').innerHTML=`<span><b>${stats.neverSubmitted}</b><small>未送信</small></span><span><b>${stats.updated}</b><small>更新あり</small></span><span><b>${stats.submittedSame}</b><small>前回送信済み</small></span>`;
+  if($('chatgptReviewStats'))$('chatgptReviewStats').innerHTML=`<span><b>${reviewStats.pending}</b><small>確認待ち</small></span><span><b>${reviewStats.needsFix}</b><small>要修正</small></span><span><b>${reviewStats.confirmed}</b><small>確認済み</small></span>`;
+  if($('writingReviewPendingCount'))$('writingReviewPendingCount').textContent=reviewStats.pending+reviewStats.needsRecheck;
+  if($('writingReviewFixCount'))$('writingReviewFixCount').textContent=reviewStats.needsFix;
   $('noteBatchSummary').textContent=`未送信・更新分 ${unsubmitted.items.length}語。前回送信済みの同一内容 ${Math.max(0,submitted)}語は${include?'含めます':'除外しています'}。`;
   $('prepareUnsubmittedNotesButton').disabled=unsubmitted.items.length===0;
   $('prepareSelectedNoteButton').disabled=selected.items.length===0;
@@ -979,20 +1060,25 @@ function renderNoteSubmissionPanel(svc=getKnowledgeService()){
   $('chatgptBatchHistory').innerHTML=history.length?history.map(batch=>`<div class="stack-item"><span class="stack-item-main"><strong>${esc(formatDateTime(batch.createdAt))} ${esc(batch.category||'知識マップ')}</strong><small>${esc(batch.firstTerm||'')} 〜 ${esc(batch.lastTerm||'')}・${batch.itemCount}語・状態: ${esc(batchStatusLabel(batch.status))}</small></span></div>`).join(''):'<p class="empty compact">送信履歴はまだありません。</p>';
   renderChatGPTReviewList(svc);
 }
+function feedbackApplyModeLabel(mode){return {append:'追記',replace:'置き換え',merge:'編集統合',undo:'元に戻す'}[mode]||'未反映';}
+function latestFeedbackRevision(termId){const rows=state.noteRevisionHistory?.[termId];return Array.isArray(rows)?rows.find(row=>row.source==='chatgpt-feedback'):null;}
 function renderChatGPTReviewList(svc=getKnowledgeService()){
   const list=$('chatgptReviewList');if(!list||!svc)return;
-  const priority={needs_fix:0,insufficient:1,pending:2,confirmed:3,written:4,short:5,empty:6};
-  const rows=svc.terms.map(term=>{const record=getTermNoteRecord(term,false),writing=writingStatusForRecord(record),content=normalizeNoteContent(record.content);return {term,record,writing,content};})
-    .filter(row=>row.content&&(row.record.lastSubmittedHash||row.record.reviewStatus!=='unreviewed'||['pending','confirmed','revise','insufficient'].includes(row.writing.key)))
-    .sort((a,b)=>(priority[a.record.reviewStatus]??priority[a.writing.key]??9)-(priority[b.record.reviewStatus]??priority[b.writing.key]??9)||String(b.record.updatedAt||'').localeCompare(String(a.record.updatedAt||'')))
-    .slice(0,24);
+  syncChatGPTReviewFilterTabs();
+  const priority={needs_fix:0,insufficient:1,needs_recheck:2,unreviewed:3,correct:4};
+  const rows=chatGPTReviewRows(svc).filter(chatGPTReviewFilterMatch).sort((a,b)=>(priority[a.record.reviewStatus]??9)-(priority[b.record.reviewStatus]??9)||String(b.record.updatedAt||'').localeCompare(String(a.record.updatedAt||''))).slice(0,80);
   list.innerHTML=rows.length?rows.map(row=>{
-    const review=row.record.reviewStatus||'unreviewed';
-    const category=svc.getCategoryPath(row.term.categoryId).map(item=>item.name).join(' > ')||'知識マップ';
-    return `<article class="chatgpt-review-item"><div><strong>${esc(row.term.name)}</strong><small>${esc(category)} / 記述: ${esc(row.writing.label)}</small></div><label>確認結果<select data-note-review-term="${esc(row.term.id)}">${noteReviewOption('unreviewed','未確認',review)}${noteReviewOption('correct','正しい',review)}${noteReviewOption('needs_fix','一部修正が必要',review)}${noteReviewOption('insufficient','理解不足',review)}</select></label><label>修正メモ<textarea class="feedback-note-area" data-note-feedback-term="${esc(row.term.id)}" placeholder="ChatGPTの指摘や直すポイントを書く">${esc(row.record.feedbackMemo||'')}</textarea></label></article>`;
-  }).join(''):'<p class="empty compact">送信済みまたは確認待ちの記述はまだありません。</p>';
+    const expanded=expandedChatgptReviewTermId===row.term.id,review=row.review,revision=latestFeedbackRevision(row.term.id),canUndo=row.applied&&revision,statusParts=[`記述: ${row.writing.label}`,`確認: ${review.label}`,row.hasFeedback?'修正メモあり':'修正メモなし'];
+    if(row.updated)statusParts.push('更新あり');
+    if(row.applied)statusParts.push(`反映済み ${feedbackApplyModeLabel(row.record.feedbackApplyMode)}`);
+    return `<article class="chatgpt-review-item compact ${expanded?'is-open':''}" data-chatgpt-review-card="${esc(row.term.id)}"><div class="chatgpt-review-summary"><div><strong>${esc(row.term.name)}</strong><small>${esc(row.category)}</small><div class="badges compact"><span class="badge ${esc(row.writing.className)}">${esc(row.writing.label)}</span><span class="badge ${esc(review.className)}">${esc(review.label)}</span>${row.hasFeedback?'<span class="badge gray">修正メモあり</span>':'<span class="badge gray">修正メモなし</span>'}${row.updated?'<span class="badge gray">更新あり</span>':''}</div></div><button class="secondary compact" data-chatgpt-review-toggle="${esc(row.term.id)}" type="button">${expanded?'詳細を閉じる':'詳細を開く'}</button></div>${expanded?`<div class="chatgpt-review-detail"><div class="chatgpt-note-preview"><strong>現在の記述</strong><p>${esc(row.content)}</p></div><label>確認結果<select data-note-review-term="${esc(row.term.id)}">${noteReviewOptions(row.record.reviewStatus||'unreviewed')}</select></label><label>修正メモ<textarea class="feedback-note-area" data-note-feedback-term="${esc(row.term.id)}" placeholder="ChatGPTの指摘や直すポイントを書く">${esc(row.record.feedbackMemo||'')}</textarea></label><p class="help" data-feedback-save-status>修正メモは自動保存します。</p><div class="feedback-apply-status">${row.applied?`<span class="badge good">記述へ反映済み</span><small>${esc(formatDateTime(row.record.feedbackAppliedAt))} / ${esc(feedbackApplyModeLabel(row.record.feedbackApplyMode))}</small>`:'<span class="badge gray">未反映</span>'}</div><div class="chatgpt-review-actions"><button class="primary" data-apply-feedback="${esc(row.term.id)}" type="button" ${row.hasFeedback?'':'disabled'}>記述へ反映</button><button class="secondary" data-map-confirm-term="${esc(row.term.id)}" type="button">マップで確認</button><button class="secondary" data-undo-feedback="${esc(row.term.id)}" type="button" ${canUndo?'':'disabled'}>元に戻す</button></div><p class="help">${esc(statusParts.join(' / '))}</p></div>`:''}</article>`;
+  }).join(''):'<p class="empty compact">条件に合う記述はありません。</p>';
+  $$('#chatgptReviewList [data-chatgpt-review-toggle]').forEach(button=>button.onclick=()=>{expandedChatgptReviewTermId=expandedChatgptReviewTermId===button.dataset.chatgptReviewToggle?'':button.dataset.chatgptReviewToggle;renderChatGPTReviewList(svc);});
   $$('#chatgptReviewList [data-note-review-term]').forEach(select=>bindKnowledgeReviewSelect(select));
   $$('#chatgptReviewList [data-note-feedback-term]').forEach(area=>bindKnowledgeFeedbackArea(area));
+  $$('#chatgptReviewList [data-apply-feedback]').forEach(button=>button.onclick=()=>openFeedbackApplyDialog(button.dataset.applyFeedback));
+  $$('#chatgptReviewList [data-map-confirm-term]').forEach(button=>button.onclick=()=>openFeedbackTermOnMap(button.dataset.mapConfirmTerm));
+  $$('#chatgptReviewList [data-undo-feedback]').forEach(button=>button.onclick=()=>undoLastFeedbackApply(button.dataset.undoFeedback));
 }
 function updateNoteSubmissionIndicators(){
   const svc=getKnowledgeService();if(!svc)return;
@@ -1070,9 +1156,87 @@ function bindKnowledgeReviewSelect(select){
   select.onchange=()=>{saveKnowledgeReview(termId,{status:select.value,rerender:true});showToast('確認結果を保存しました');};
 }
 function bindKnowledgeFeedbackArea(area){
-  const termId=area.dataset.noteFeedbackTerm,setStatus=()=>{const root=area.closest('[data-knowledge-detail-root]')||area.closest('.knowledge-note-section'),status=root?.querySelector('[data-map-note-status]');if(status)status.textContent='修正メモを保存しました';};
-  area.oninput=()=>{clearTimeout(knowledgeFeedbackSaveTimer);knowledgeFeedbackSaveTimer=setTimeout(()=>{saveKnowledgeReview(termId,{feedback:area.value,refresh:false});setStatus();},700);};
+  const termId=area.dataset.noteFeedbackTerm,setStatus=()=>{const root=area.closest('.chatgpt-review-detail')||area.closest('[data-knowledge-detail-root]')||area.closest('.knowledge-note-section'),status=root?.querySelector('[data-feedback-save-status]')||root?.querySelector('[data-map-note-status]');if(status)status.textContent='修正メモを保存しました';};
+  area.oninput=()=>{const root=area.closest('.chatgpt-review-detail')||area.closest('[data-knowledge-detail-root]')||area.closest('.knowledge-note-section'),status=root?.querySelector('[data-feedback-save-status]')||root?.querySelector('[data-map-note-status]');if(status)status.textContent='保存中...';clearTimeout(knowledgeFeedbackSaveTimer);knowledgeFeedbackSaveTimer=setTimeout(()=>{saveKnowledgeReview(termId,{feedback:area.value,refresh:false});setStatus();},700);};
   area.onblur=()=>{clearTimeout(knowledgeFeedbackSaveTimer);saveKnowledgeReview(termId,{feedback:area.value});setStatus();};
+}
+function noteRevisionId(){return `note-revision-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;}
+function pushNoteRevision(termId,{previousContent,newContent,source='chatgpt-feedback',applyMode=''}){
+  if(!state.noteRevisionHistory||typeof state.noteRevisionHistory!=='object')state.noteRevisionHistory={};
+  const id=String(termId||'');if(!id)return;
+  const row={id:noteRevisionId(),changedAt:new Date().toISOString(),previousContent:String(previousContent||''),newContent:String(newContent||''),source,applyMode};
+  state.noteRevisionHistory[id]=[row,...(Array.isArray(state.noteRevisionHistory[id])?state.noteRevisionHistory[id]:[])].slice(0,NOTE_REVISION_HISTORY_LIMIT);
+}
+function persistKnowledgeTermNoteContent(term,record,note,now){
+  record.content=String(note||'');
+  record.updatedAt=now;
+  if(term.appTermId){const writable=getTermState(term.appTermId);writable.note=record.content;writable.updatedAt=localDate();}
+  else {if(!state.knowledgeNotes||typeof state.knowledgeNotes!=='object')state.knowledgeNotes={};state.knowledgeNotes[term.id]={note:record.content,updatedAt:now};}
+}
+function mergedFeedbackDraft(current,memo){return [normalizeNoteContent(current),normalizeNoteContent(memo)].filter(Boolean).join('\n\n');}
+function openFeedbackApplyDialog(termId){
+  const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term){showToast('対象の用語が見つかりません');return;}
+  const record=getTermNoteRecord(term,true),memo=normalizeNoteContent(record.feedbackMemo),current=record.content||'';
+  if(!memo){showToast('反映する修正メモがありません');return;}
+  pendingFeedbackApplyTermId=term.id;
+  const dialog=$('feedbackApplyDialog'),content=$('feedbackApplyDialogContent');if(!dialog||!content)return;
+  content.innerHTML=`<div class="dialog-head"><div><p class="eyebrow">Apply feedback</p><h2>「${esc(term.name)}」の記述へ修正内容を反映します</h2></div><button class="close-button" data-close-feedback-apply type="button">×</button></div><section class="feedback-apply-preview"><h3>現在の記述</h3><p>${esc(current||'未記入')}</p></section><section class="feedback-apply-preview"><h3>修正メモ</h3><p>${esc(memo)}</p></section><section class="feedback-apply-method"><h3>反映方法</h3><label class="radio-row"><input name="feedbackApplyMode" value="append" type="radio">現在の記述の末尾へ追記</label><label class="radio-row"><input name="feedbackApplyMode" value="replace" type="radio">現在の記述を修正メモで置き換え</label><label class="radio-row"><input name="feedbackApplyMode" value="merge" type="radio" checked>編集画面で統合してから保存</label><textarea id="feedbackMergeArea" class="feedback-merge-area">${esc(mergedFeedbackDraft(current,memo))}</textarea></section><div class="dialog-actions"><button class="secondary" data-close-feedback-apply type="button">キャンセル</button><button id="applyFeedbackButton" class="primary" type="button">反映する</button></div>`;
+  $$('[data-close-feedback-apply]').forEach(button=>button.onclick=()=>dialog.close());
+  $('applyFeedbackButton').onclick=applyFeedbackToNote;
+  if(!dialog.open)dialog.showModal();
+}
+function applyFeedbackToNote(){
+  const termId=pendingFeedbackApplyTermId,svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term)return;
+  const record=getTermNoteRecord(term,true),current=String(record.content||''),memo=normalizeNoteContent(record.feedbackMemo),mode=qs('input[name="feedbackApplyMode"]:checked')?.value||'merge';
+  const mergeValue=$('feedbackMergeArea')?.value||'';
+  const next=mode==='append'?mergedFeedbackDraft(current,memo):(mode==='replace'?memo:mergeValue);
+  const now=new Date().toISOString();
+  pushNoteRevision(term.id,{previousContent:current,newContent:next,source:'chatgpt-feedback',applyMode:mode});
+  persistKnowledgeTermNoteContent(term,record,next,now);
+  record.feedbackAppliedAt=now;
+  record.feedbackApplyMode=mode;
+  record.feedbackAppliedContent=next;
+  record.reviewStatus='needs_recheck';
+  record.reviewedAt=now;
+  record.writingStatus=writingStatusForRecord(record).key;
+  saveState(false);
+  $('feedbackApplyDialog')?.close();
+  pendingFeedbackApplyTermId='';
+  showToast('修正メモを記述へ反映しました');
+  updateNoteSubmissionIndicators();
+  if(currentView==='map'){renderKnowledgeMap();renderKnowledgeDetail(term.id);}
+  if(currentView==='review')renderReview();
+}
+function undoLastFeedbackApply(termId){
+  const svc=getKnowledgeService(),term=svc?.getTerm(termId),last=latestFeedbackRevision(termId);
+  if(!term||!last){showToast('元に戻せる履歴がありません');return;}
+  const record=getTermNoteRecord(term,true),current=String(record.content||''),now=new Date().toISOString();
+  pushNoteRevision(term.id,{previousContent:current,newContent:last.previousContent,source:'chatgpt-feedback-undo',applyMode:'undo'});
+  persistKnowledgeTermNoteContent(term,record,last.previousContent,now);
+  record.feedbackAppliedAt=null;
+  record.feedbackApplyMode='undo';
+  record.feedbackAppliedContent='';
+  record.reviewStatus='needs_recheck';
+  record.reviewedAt=now;
+  record.writingStatus=writingStatusForRecord(record).key;
+  saveState(false);
+  showToast('直前の反映を元に戻しました');
+  updateNoteSubmissionIndicators();
+  if(currentView==='map'){renderKnowledgeMap();renderKnowledgeDetail(term.id);}
+  if(currentView==='review')renderReview();
+}
+function openFeedbackTermOnMap(termId){
+  const svc=getKnowledgeService(),term=svc?.getTerm(termId);
+  if(!term){showToast('マップ内に対象用語が見つかりません');return;}
+  navTo('map');
+  setTimeout(()=>{
+    if(!selectKnowledgeTerm(term.id,{scroll:true,highlight:true}))return;
+    if(memorizationRuntime.enabled){memorizationRuntime.manualToggleTermId=term.id;applyMemorizationCovers();}
+    setTimeout(()=>{
+      const area=qs(`[data-map-note-term="${CSS.escape(term.id)}"]`);
+      if(area){area.classList.add('note-applied-highlight');area.focus({preventScroll:true});setTimeout(()=>area.classList.remove('note-applied-highlight'),2600);}
+    },180);
+  },60);
 }
 function bindMemorizationRatingButton(button){
   button.onclick=()=>saveMemorizationRating(button.dataset.memorizationRatingTerm,button.dataset.memorizationRating);
@@ -1512,7 +1676,7 @@ function quizSessionId(){return `quiz-${Date.now().toString(36)}-${Math.random()
 function quizItemTargetId(item){return String(item?.target?.id??'');}
 function quizItemSystem(item){return String(item?.source==='subjectA'?item.target?.system:item?.target?.['系']||'');}
 function quizSourceLabel(value){return value==='subjectA'?'科目A':'用語4択';}
-function quizModeLabel(value){return ({recommended:'おすすめ',random:'ランダム',weak:'苦手優先',due:'復習期限',unlearned:'未学習優先',knowledge:'知識マップ',retry:'復習',mock:'模試形式'})[value]||value||'おすすめ';}
+function quizModeLabel(value){return ({recommended:'おすすめ',random:'ランダム',weak:'苦手優先',wrong:'誤答復習',due:'復習期限',unlearned:'未学習優先',knowledge:'知識マップ',retry:'復習',mock:'模試形式'})[value]||value||'おすすめ';}
 function quizTypeLabel(value){return ({mixed:'ミックス',description:'説明 → 用語',term:'用語 → 説明',mock:'模試形式',subjectA:'科目A'})[value]||value||'ミックス';}
 function quizSystemLabel(value){return value||'全分野';}
 function quizAnsweredCount(target=quiz){return target?.items?.filter(item=>item.graded).length||0;}
@@ -1753,11 +1917,37 @@ function finishQuiz(){
   renderAll();
 }
 
+function selectedReviewSystem(){return $('reviewSystemFilter')?.value||'';}
 function reviewCard(t){const s=readTermState(t.id),priority=reviewPriority(t),status=reviewStatus(t);return `<button class="stack-item review-card term-link text-button" data-term-id="${esc(t.id)}"><span class="stack-item-main"><strong>${esc(t['用語'])}</strong><small>${esc(status.label)}・次回 ${esc(formatReviewDate(reviewDate(s)))}・誤答${s.wrong}・連続正解${s.streak}</small><span class="badges">${statusBadge(t)}<span class="badge gray">Lv.${formatMastery(s.mastery)}</span></span></span><span class="review-priority"><b>${priority}</b><small>優先度</small></span></button>`;}
-function reviewTerms(){if(reviewFilter==='wrong')return TERMS.filter(t=>readTermState(t.id).wrong>0).sort((a,b)=>reviewPriority(b)-reviewPriority(a)||readTermState(b.id).wrong-readTermState(a.id).wrong);if(reviewFilter==='bookmark')return TERMS.filter(t=>readTermState(t.id).bookmark).sort((a,b)=>reviewPriority(b)-reviewPriority(a));return priorityReviewTerms();}
-function renderReview(){const list=reviewTerms(),queue=priorityReviewTerms(),top=queue[0];$('reviewCountLabel').textContent=`${list.length}語`;$('reviewHeroCount').textContent=`${queue.length}語`;$('nextReviewDate').textContent=formatReviewDate(nextReviewDate());$('reviewTopPriority').textContent=top?reviewPriority(top):'—';$('startReviewButton').disabled=queue.length===0;$('reviewList').innerHTML=list.length?list.slice(0,100).map(reviewCard).join(''):'<div class="panel empty">現在の対象はありません。</div>';bindTermLinks();}
+function reviewTerms(){const system=selectedReviewSystem();if(reviewFilter==='wrong')return TERMS.filter(t=>(!system||t['系']===system)&&readTermState(t.id).wrong>0).sort((a,b)=>reviewPriority(b)-reviewPriority(a)||readTermState(b.id).wrong-readTermState(a.id).wrong);if(reviewFilter==='bookmark')return TERMS.filter(t=>(!system||t['系']===system)&&readTermState(t.id).bookmark).sort((a,b)=>reviewPriority(b)-reviewPriority(a));return priorityReviewTerms(system);}
+function reviewProblemStats(system=selectedReviewSystem()){
+  const due=priorityReviewTerms(system),wrong=TERMS.filter(t=>(!system||t['系']===system)&&readTermState(t.id).wrong>0),weak=weakTerms(system),deadline=dueTerms().filter(t=>!system||t['系']===system),last=state.sessions?.slice().reverse().find(session=>session.source!=='subjectA');
+  return {due,wrong,weak,deadline,lastScore:last?`${last.correct}/${last.total}`:'—'};
+}
+function startTermReviewFromTerms(terms,mode='review'){
+  if(!terms.length){showToast('対象の復習問題はありません');return;}
+  if(state.quizDraft&&!confirm('途中の演習を破棄して新しく開始しますか？'))return;
+  const selected=terms.slice(0,20),system=selectedReviewSystem();
+  navTo('quiz');
+  clearQuizDraft(false);
+  $('quizSource').value='terms';$('quizMode').value=mode==='due'?'due':'weak';$('quizSystem').value=system;$('quizLength').value=String([5,10,20].includes(selected.length)?selected.length:10);$('quizType').value='mixed';
+  quiz={sessionId:quizSessionId(),source:'terms',mode,system,type:'mixed',length:selected.length,index:0,correct:0,answered:false,items:selected.map(t=>makeQuestion(t,'mixed')),results:[],startedAt:Date.now(),completed:false};
+  persistQuizDraft();$('quizSetup').classList.add('hidden');$('quizArea').classList.remove('hidden');renderQuizQuestion();
+}
+function startReviewMode(mode='due'){
+  const system=selectedReviewSystem(),stats=reviewProblemStats(system);
+  if(mode==='wrong')return startTermReviewFromTerms(stats.wrong.sort((a,b)=>readTermState(b.id).wrong-readTermState(a.id).wrong||reviewPriority(b)-reviewPriority(a)),'wrong');
+  if(mode==='weak')return startTermReviewFromTerms(stats.weak,'weak');
+  startTermReviewFromTerms(stats.due,'due');
+}
+function resumeReviewFromReviewScreen(){
+  if(!migrateQuizDraft(state.quizDraft)){showToast('再開できる途中演習がありません');return;}
+  navTo('quiz');
+  resumeQuizDraft();
+}
+function renderReview(){const list=reviewTerms(),stats=reviewProblemStats(),reviewStats=chatGPTReviewStats(getKnowledgeService()),top=stats.due[0];$('reviewCountLabel').textContent=`${list.length}語`;$('reviewHeroCount').textContent=`${stats.due.length}語`;$('problemReviewReadyCount').textContent=stats.due.length;$('problemReviewWrongCount').textContent=stats.wrong.length;$('problemReviewDueCount').textContent=stats.due.length;$('problemReviewWrongOnlyCount').textContent=stats.wrong.length;$('problemReviewWeakCount').textContent=stats.weak.length;$('problemReviewDeadlineCount').textContent=stats.deadline.length;$('problemReviewLastScore').textContent=stats.lastScore;$('nextReviewDate').textContent=formatReviewDate(nextReviewDate());$('startReviewButton').disabled=stats.due.length===0;$('startDueReviewButton').disabled=stats.due.length===0;$('startWrongReviewButton').disabled=stats.wrong.length===0;$('startWeakReviewButton').disabled=stats.weak.length===0;$('resumeReviewButton').disabled=!migrateQuizDraft(state.quizDraft);$('writingReviewPendingCount').textContent=reviewStats.pending+reviewStats.needsRecheck;$('writingReviewFixCount').textContent=reviewStats.needsFix;$('reviewList').innerHTML=list.length?list.slice(0,100).map(reviewCard).join(''):'<div class="panel empty">現在の対象はありません。</div>';renderNoteSubmissionPanel(getKnowledgeService());bindTermLinks();}
 function statusSegment(label,count,total,kind){const raw=total?count/total*100:0,pct=Math.round(raw),width=count?Math.max(2,pct):0,display=count&&pct===0?'&lt;1%':pct+'%';return `<div class="status-segment ${esc(kind)}"><div><strong>${esc(label)}</strong><span>${count}語 / ${display}</span></div><div class="progress-track"><span style="width:${width}%"></span></div></div>`;}
-function renderProgress(){const total=state.attempts.length,c=state.attempts.filter(a=>a.correct).length,ready=readiness();$('totalAnswersValue').textContent=total;$('totalCorrectValue').textContent=c;$('studyDaysValue').textContent=daysWithActivity().length;$('bestStreakValue').textContent=bestStreak()+'日';$('progressReadinessValue').textContent=ready+'%';$('progressReadinessBar').style.width=ready+'%';$('studyAdviceText').textContent=`参考値です。${studyAdvice()}`;const status=learningStatusCounts(),termTotal=TERMS.length;$('learningStatusSummary').innerHTML=[statusSegment('未学習',status.unlearned,termTotal,'unlearned'),statusSegment('学習中',status.learning,termTotal,'learning'),statusSegment('習得済み',status.mastered,termTotal,'mastered')].join('');renderWritingTestSummary();renderNoteSubmissionPanel(getKnowledgeService());const days=renderActivityChart($('progressActivityChart')),sum=days.reduce((a,b)=>a+b.count,0),active=days.filter(x=>x.count>0).length;$('progressActivitySummary').textContent=`14日間で${sum}問、学習日は${active}日です。`;const weakSystems=weakSystemStats().filter(x=>x.attempts>0||x.studied>0).slice(0,3);$('weakAreaSummary').innerHTML=weakSystems.length?weakSystems.map(x=>`<div class="stack-item"><span class="stack-item-main"><strong>${esc(x.system)}</strong><small>正答率 ${x.accuracy===null?'—':x.accuracy+'%'}・誤答 ${x.wrong}・学習済み ${x.studied}/${x.terms}語</small></span><b>${Math.round(x.weakScore)}</b></div>`).join(''):'<p class="empty">まだ苦手分野を判定できる履歴がありません。</p>';$('categoryAnalytics').innerHTML=groupStats().map(x=>`<div class="analytics-row"><strong>${esc(x.system)}</strong><div class="progress-track"><span style="width:${x.accuracy??0}%"></span></div><span>${x.accuracy===null?'—':x.accuracy+'%'}</span><small>${x.correct}/${x.attempts}問正解・${x.studied}/${x.terms}語学習</small></div>`).join('');const rank=TERMS.filter(t=>readTermState(t.id).wrong>0).sort((a,b)=>readTermState(b.id).wrong-readTermState(a.id).wrong||reviewPriority(b)-reviewPriority(a)).slice(0,10);$('mistakeRanking').innerHTML=rank.length?rank.map(stackTerm).join(''):'<p class="empty">誤答履歴はありません。</p>';bindTermLinks();}
+function renderProgress(){const total=state.attempts.length,c=state.attempts.filter(a=>a.correct).length,ready=readiness();$('totalAnswersValue').textContent=total;$('totalCorrectValue').textContent=c;$('studyDaysValue').textContent=daysWithActivity().length;$('bestStreakValue').textContent=bestStreak()+'日';$('progressReadinessValue').textContent=ready+'%';$('progressReadinessBar').style.width=ready+'%';$('studyAdviceText').textContent=`参考値です。${studyAdvice()}`;const status=learningStatusCounts(),termTotal=TERMS.length;$('learningStatusSummary').innerHTML=[statusSegment('未学習',status.unlearned,termTotal,'unlearned'),statusSegment('学習中',status.learning,termTotal,'learning'),statusSegment('習得済み',status.mastered,termTotal,'mastered')].join('');renderWritingTestSummary();const days=renderActivityChart($('progressActivityChart')),sum=days.reduce((a,b)=>a+b.count,0),active=days.filter(x=>x.count>0).length;$('progressActivitySummary').textContent=`14日間で${sum}問、学習日は${active}日です。`;const weakSystems=weakSystemStats().filter(x=>x.attempts>0||x.studied>0).slice(0,3);$('weakAreaSummary').innerHTML=weakSystems.length?weakSystems.map(x=>`<div class="stack-item"><span class="stack-item-main"><strong>${esc(x.system)}</strong><small>正答率 ${x.accuracy===null?'—':x.accuracy+'%'}・誤答 ${x.wrong}・学習済み ${x.studied}/${x.terms}語</small></span><b>${Math.round(x.weakScore)}</b></div>`).join(''):'<p class="empty">まだ苦手分野を判定できる履歴がありません。</p>';$('categoryAnalytics').innerHTML=groupStats().map(x=>`<div class="analytics-row"><strong>${esc(x.system)}</strong><div class="progress-track"><span style="width:${x.accuracy??0}%"></span></div><span>${x.accuracy===null?'—':x.accuracy+'%'}</span><small>${x.correct}/${x.attempts}問正解・${x.studied}/${x.terms}語学習</small></div>`).join('');const rank=TERMS.filter(t=>readTermState(t.id).wrong>0).sort((a,b)=>readTermState(b.id).wrong-readTermState(a.id).wrong||reviewPriority(b)-reviewPriority(a)).slice(0,10);$('mistakeRanking').innerHTML=rank.length?rank.map(stackTerm).join(''):'<p class="empty">誤答履歴はありません。</p>';bindTermLinks();}
 function renderSettings(){
   const memorization=memorizationSettings();
   $('dailyGoalInput').value=state.settings.dailyGoal||10;

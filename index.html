@@ -9,7 +9,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./assets/styles.css?v=2.1.5">
+  <link rel="stylesheet" href="./assets/styles.css?v=2.1.6">
   <title>FE Learning OS</title>
 </head>
 <body>
@@ -104,19 +104,83 @@
     </section>
 
     <section id="view-review" class="view" aria-labelledby="reviewTitle">
-      <div class="section-heading"><div><p class="eyebrow">Spaced repetition</p><h2 id="reviewTitle">復習</h2></div><strong id="reviewCountLabel" class="subtle" aria-live="polite"></strong></div>
-      <div class="hero-card compact review-hero">
-        <div><span class="hero-label">今日の復習</span><strong id="reviewHeroCount">0語</strong></div>
-        <div class="review-hero-meta">
-          <div><span class="hero-label">次回復習</span><strong id="nextReviewDate">—</strong></div>
-          <div><span class="hero-label">最優先</span><strong id="reviewTopPriority">—</strong></div>
+      <div class="section-heading"><div><p class="eyebrow">Review</p><h2 id="reviewTitle">復習</h2><p class="help">弱点や記述内容を確認して、理解を固めます。</p></div><strong id="reviewCountLabel" class="subtle" aria-live="polite"></strong></div>
+      <div class="review-choice-grid" aria-label="復習方法">
+        <article class="review-choice-card">
+          <div class="review-choice-icon" aria-hidden="true">①</div>
+          <div class="review-choice-main">
+            <h3>問題で復習</h3>
+            <p>誤答・期限到来・苦手問題を解きます。</p>
+            <div class="review-choice-stats"><span>要復習 <b id="problemReviewReadyCount">0</b>問</span><span>誤答 <b id="problemReviewWrongCount">0</b>問</span></div>
+          </div>
+          <button id="startReviewButton" class="primary" type="button">復習を始める</button>
+        </article>
+        <article class="review-choice-card">
+          <div class="review-choice-icon" aria-hidden="true">②</div>
+          <div class="review-choice-main">
+            <h3>ChatGPTで記述を復習</h3>
+            <p>自分の説明の正誤・不足を確認します。</p>
+            <div class="review-choice-stats"><span>未確認 <b id="writingReviewPendingCount">0</b>件</span><span>要修正 <b id="writingReviewFixCount">0</b>件</span></div>
+          </div>
+          <button id="openWritingReviewButton" class="secondary" type="button">確認画面を開く</button>
+        </article>
+      </div>
+      <section id="problemReviewPanel" class="panel review-workspace">
+        <div class="panel-title-row"><h3>問題による復習</h3><strong id="reviewHeroCount" class="subtle">0語</strong></div>
+        <div class="review-metrics-grid">
+          <span><b id="problemReviewDueCount">0</b><small>今日の要復習</small></span>
+          <span><b id="problemReviewWrongOnlyCount">0</b><small>誤答問題</small></span>
+          <span><b id="problemReviewWeakCount">0</b><small>苦手問題</small></span>
+          <span><b id="problemReviewDeadlineCount">0</b><small>期限到来</small></span>
+          <span><b id="problemReviewLastScore">—</b><small>前回成績</small></span>
+          <span><b id="nextReviewDate">—</b><small>次回復習</small></span>
         </div>
-        <button id="startReviewButton" class="primary" type="button">復習開始</button>
-      </div>
-      <div class="segmented" role="tablist" aria-label="復習対象の切替">
-        <button class="active" data-review-filter="due" type="button" role="tab" aria-selected="true">期限</button><button data-review-filter="wrong" type="button" role="tab" aria-selected="false">誤答</button><button data-review-filter="bookmark" type="button" role="tab" aria-selected="false">保存</button>
-      </div>
-      <div id="reviewList" class="card-list"></div>
+        <div class="review-action-grid">
+          <button id="startDueReviewButton" class="primary" type="button">今日の復習を始める</button>
+          <button id="startWrongReviewButton" class="secondary" type="button">誤答のみ</button>
+          <button id="startWeakReviewButton" class="secondary" type="button">苦手のみ</button>
+          <button id="resumeReviewButton" class="secondary" type="button">途中の復習を再開</button>
+        </div>
+        <label class="review-system-filter">分野を選ぶ<select id="reviewSystemFilter"><option value="">全分野</option></select></label>
+        <div class="segmented" role="tablist" aria-label="復習対象の切替">
+          <button class="active" data-review-filter="due" type="button" role="tab" aria-selected="true">期限</button><button data-review-filter="wrong" type="button" role="tab" aria-selected="false">誤答</button><button data-review-filter="bookmark" type="button" role="tab" aria-selected="false">保存</button>
+        </div>
+        <div id="reviewList" class="card-list"></div>
+      </section>
+      <section id="writingReviewPanel" class="panel map-chatgpt-panel chatgpt-review-panel writing-review-panel hidden">
+        <div class="panel-title-row"><h3>ChatGPTによる記述復習</h3><strong id="noteBatchReadyCount" class="subtle">0語</strong></div>
+        <div id="chatgptBatchStats" class="chatgpt-batch-stats" aria-label="ChatGPT確認の対象件数"></div>
+        <div id="chatgptReviewStats" class="chatgpt-batch-stats" aria-label="ChatGPT確認結果の件数"></div>
+        <p id="noteBatchSummary" class="help"></p>
+        <label class="checkbox-row"><input id="includeSubmittedNotes" type="checkbox">前回送信済みの同一内容も含める</label>
+        <div class="chatgpt-target-picker">
+          <div class="panel-title-row compact"><h4>送信対象を選ぶ</h4><span class="subtle">分野・用語</span></div>
+          <label>分野<select id="chatgptSubjectFilter"><option value="">すべての分野</option></select></label>
+          <div class="chatgpt-term-picker">
+            <label>用語<select id="chatgptTermSelect"><option value="">用語を選択</option></select></label>
+            <button id="addChatgptTermButton" class="secondary" type="button">対象に追加</button>
+          </div>
+          <div id="chatgptSelectedTerms" class="chatgpt-selected-terms"></div>
+        </div>
+        <div class="knowledge-inline-actions">
+          <button id="prepareChosenNotesButton" class="secondary" type="button">選択対象をまとめる</button>
+          <button id="prepareSubjectNotesButton" class="secondary" type="button">分野をまとめる</button>
+          <button id="prepareUnsubmittedNotesButton" class="primary" type="button">未送信をまとめる</button>
+          <button id="prepareSelectedNoteButton" class="secondary" type="button">マップ選択中をまとめる</button>
+        </div>
+        <div id="chatgptBatchHistory" class="stack-list compact"></div>
+        <div class="chatgpt-review-section">
+          <div class="panel-title-row compact"><h4>確認結果を反映</h4><span class="subtle">修正メモは履歴として残ります</span></div>
+          <div class="segmented chatgpt-review-filter" role="tablist" aria-label="記述確認の絞り込み">
+            <button class="active" data-chatgpt-review-filter="all" type="button" role="tab" aria-selected="true">すべて</button>
+            <button data-chatgpt-review-filter="unsubmitted" type="button" role="tab" aria-selected="false">未送信</button>
+            <button data-chatgpt-review-filter="pending" type="button" role="tab" aria-selected="false">確認待ち</button>
+            <button data-chatgpt-review-filter="needs_fix" type="button" role="tab" aria-selected="false">要修正</button>
+            <button data-chatgpt-review-filter="confirmed" type="button" role="tab" aria-selected="false">確認済み</button>
+          </div>
+          <div id="chatgptReviewList" class="chatgpt-review-list"></div>
+        </div>
+      </section>
     </section>
 
     <section id="view-progress" class="view" aria-labelledby="progressTitle">
@@ -137,32 +201,6 @@
         <h3>記述とテストの進捗</h3>
         <div id="writingTestSummary" class="learning-status"></div>
         <div id="writingSubjectSummary" class="analytics-list"></div>
-      </section>
-      <section class="panel map-chatgpt-panel chatgpt-review-panel">
-        <div class="panel-title-row"><h3>ChatGPTまとめ確認</h3><strong id="noteBatchReadyCount" class="subtle">0語</strong></div>
-        <div id="chatgptBatchStats" class="chatgpt-batch-stats" aria-label="ChatGPT確認の対象件数"></div>
-        <p id="noteBatchSummary" class="help"></p>
-        <label class="checkbox-row"><input id="includeSubmittedNotes" type="checkbox">前回送信済みの同一内容も含める</label>
-        <div class="chatgpt-target-picker">
-          <div class="panel-title-row compact"><h4>対象を選ぶ</h4><span class="subtle">分野・用語</span></div>
-          <label>分野<select id="chatgptSubjectFilter"><option value="">すべての分野</option></select></label>
-          <div class="chatgpt-term-picker">
-            <label>用語<select id="chatgptTermSelect"><option value="">用語を選択</option></select></label>
-            <button id="addChatgptTermButton" class="secondary" type="button">対象に追加</button>
-          </div>
-          <div id="chatgptSelectedTerms" class="chatgpt-selected-terms"></div>
-        </div>
-        <div class="knowledge-inline-actions">
-          <button id="prepareChosenNotesButton" class="secondary" type="button">選択対象をまとめる</button>
-          <button id="prepareSubjectNotesButton" class="secondary" type="button">分野をまとめる</button>
-          <button id="prepareUnsubmittedNotesButton" class="primary" type="button">未送信をまとめる</button>
-          <button id="prepareSelectedNoteButton" class="secondary" type="button">マップ選択中をまとめる</button>
-        </div>
-        <div id="chatgptBatchHistory" class="stack-list compact"></div>
-        <div class="chatgpt-review-section">
-          <div class="panel-title-row compact"><h4>確認結果を反映</h4><span class="subtle">カード外で管理</span></div>
-          <div id="chatgptReviewList" class="chatgpt-review-list"></div>
-        </div>
       </section>
       <section class="panel"><h3>最近14日間の学習量</h3><div id="progressActivityChart" class="activity-chart" aria-label="最近14日間の解答数"></div><p id="progressActivitySummary" class="help"></p></section>
       <section class="panel"><h3>苦手分野</h3><div id="weakAreaSummary" class="stack-list"></div></section>
@@ -302,7 +340,7 @@
         <h3>無料AI連携</h3><p class="help">API料金を使わず、今日の弱点整理に使う質問文をコピーできます。</p>
         <button id="copyGeneralPromptButton" class="secondary full" type="button">今日の弱点を整理する質問文をコピー</button>
       </section>
-      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.1.5</p><p>オフライン対応・GitHub Pages対応</p></section>
+      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.1.6</p><p>オフライン対応・GitHub Pages対応</p></section>
     </section>
   </main>
 
@@ -318,6 +356,7 @@
   <dialog id="termDialog"><div id="termDialogContent" class="dialog-body"></div></dialog>
   <dialog id="resultDialog"><div id="resultDialogContent" class="dialog-body"></div></dialog>
   <dialog id="chatgptBatchDialog"><div id="chatgptBatchDialogContent" class="dialog-body"></div></dialog>
+  <dialog id="feedbackApplyDialog"><div id="feedbackApplyDialogContent" class="dialog-body"></div></dialog>
   <div id="updateBanner" class="update-banner hidden" role="status" aria-live="polite"><span>新しい版を利用できます</span><button id="reloadUpdateButton" class="primary" type="button">更新</button></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
@@ -326,6 +365,6 @@
   <script src="./assets/subject-a-data.js"></script>
   <script src="./assets/knowledge-map-data.js"></script>
   <script src="./assets/knowledge-map.js"></script>
-  <script src="./assets/app.js?v=2.1.5"></script>
+  <script src="./assets/app.js?v=2.1.6"></script>
 </body>
 </html>
