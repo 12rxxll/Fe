@@ -1357,10 +1357,24 @@ textarea {
   color: var(--text);
   padding: 9px 10px 9px 8px;
   text-align: left;
+  scroll-margin: 92px 0 108px;
 }
 
 .knowledge-node.selected {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.knowledge-node.is-highlighted,
+.knowledge-node:target {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 24%, transparent);
+  animation: map-highlight-pulse 900ms ease-in-out 2;
+}
+
+@keyframes map-highlight-pulse {
+  0%, 100% { transform: translateZ(0) scale(1); }
+  50% { transform: translateZ(0) scale(1.012); }
 }
 
 .knowledge-node-title {
@@ -1488,6 +1502,48 @@ textarea {
   line-height: 1.35;
 }
 
+.related-accordion {
+  display: grid;
+  gap: 9px;
+}
+
+.related-term-list {
+  display: grid;
+  gap: 8px;
+}
+
+.related-term-item {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--panel);
+  color: var(--text);
+  padding: 10px;
+  text-align: left;
+}
+
+.related-term-item strong,
+.related-term-item small {
+  display: block;
+  min-width: 0;
+}
+
+.related-term-item small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.related-term-item.missing {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel-2) 84%, var(--panel));
+}
+
 .knowledge-inline-close {
   display: grid;
   place-items: center;
@@ -1540,7 +1596,7 @@ textarea {
 }
 
 .knowledge-inline-actions button {
-  min-height: 42px;
+  min-height: 44px;
   padding: 8px 10px;
 }
 

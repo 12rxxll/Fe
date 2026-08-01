@@ -7,7 +7,7 @@ const KNOWLEDGE_TERMS = knowledgeMapTermsToGlossary(KMAP_DATA);
 const TERMS = mergeTerms(CORE_TERMS, SYLLABUS_TERMS, KNOWLEDGE_TERMS);
 const SUBJECT_A = Array.isArray(window.FE_SUBJECT_A_QUESTIONS) ? window.FE_SUBJECT_A_QUESTIONS : [];
 const STORAGE_KEY = 'fe-learning-os-v2';
-const DATA_SCHEMA = 10;
+const DATA_SCHEMA = 11;
 const DAY = 86400000;
 const NOTE_MIN_CHARS = 10;
 const NOTE_BATCH_MAX_TERMS = 20;
@@ -23,7 +23,8 @@ const MEMORIZATION_DEFAULTS = {
   panelVisible:true
 };
 const defaultMemorizationSettings = () => Object.assign({}, MEMORIZATION_DEFAULTS);
-const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system',memorization:defaultMemorizationSettings()},terms:{},knowledgeNotes:{},termNotes:{},memorizationRatings:{},quizDraft:null,chatgptSubmissionBatches:[],attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
+const defaultUiState = () => ({quizSetup:{source:'terms',mode:'recommended',system:'',length:'10',type:'mixed'},map:{scrollY:0,selectedTermId:'',mapMode:'overview',expandedRelatedTermIds:[]}});
+const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system',memorization:defaultMemorizationSettings()},terms:{},knowledgeNotes:{},termNotes:{},memorizationRatings:{},quizDraft:null,uiState:defaultUiState(),chatgptSubmissionBatches:[],attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
 let needsMigrationSave = false;
 let state = loadState();
 let currentView = 'home';
@@ -44,6 +45,7 @@ let knowledgeNoteComposing = false;
 let knowledgeCompositionBlockUntil = 0;
 let pendingNoteSubmission = null;
 let memorizationRotationPauseUntil = 0;
+let knowledgeUiSaveTimer = null;
 const memorizationRuntime = {
   enabled:false,
   sensorWanted:false,
@@ -69,6 +71,9 @@ const memorizationRuntime = {
 };
 const knowledgeExpandedCategories = new Set();
 const knowledgeCategoryLimits = new Map();
+const knowledgeExpandedRelatedTerms = new Set();
+let knowledgeHighlightTimer = null;
+let highlightedKnowledgeTermId = '';
 const termById = new Map(TERMS.map(t => [String(t.id), t]));
 const termByName = new Map(TERMS.map(t => [normalize(t['用語']), t]));
 
@@ -163,6 +168,26 @@ function migrateQuizDraft(value={}){
     completed:false
   };
 }
+function migrateUiState(value={}){
+  const raw=value&&typeof value==='object'?value:{},defaults=defaultUiState();
+  const quizSetup=raw.quizSetup&&typeof raw.quizSetup==='object'?raw.quizSetup:{};
+  const map=raw.map&&typeof raw.map==='object'?raw.map:{};
+  return {
+    quizSetup:{
+      source:quizSetup.source==='subjectA'?'subjectA':'terms',
+      mode:['recommended','random','weak','due','unlearned'].includes(quizSetup.mode)?quizSetup.mode:'recommended',
+      system:String(quizSetup.system||''),
+      length:['5','10','20'].includes(String(quizSetup.length))?String(quizSetup.length):defaults.quizSetup.length,
+      type:['mixed','description','term','mock'].includes(quizSetup.type)?quizSetup.type:'mixed'
+    },
+    map:{
+      scrollY:Math.max(0,Number(map.scrollY)||0),
+      selectedTermId:String(map.selectedTermId||''),
+      mapMode:map.mapMode==='tree'?'tree':'overview',
+      expandedRelatedTermIds:Array.isArray(map.expandedRelatedTermIds)?map.expandedRelatedTermIds.map(String).slice(0,80):[]
+    }
+  };
+}
 function migrateMemorizationSettings(value={}){
   const raw=value&&typeof value==='object'?value:{},s=Object.assign(defaultMemorizationSettings(),raw);
   s.enabled=Boolean(s.enabled);
@@ -174,7 +199,7 @@ function migrateMemorizationSettings(value={}){
   s.panelVisible=s.panelVisible!==false;
   return s;
 }
-function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.settings=s.settings&&typeof s.settings==='object'?Object.assign(defaultState().settings,s.settings||{}):defaultState().settings;s.settings.memorization=migrateMemorizationSettings(s.settings.memorization);s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});s.memorizationRatings=s.memorizationRatings&&typeof s.memorizationRatings==='object'?s.memorizationRatings:{};Object.keys(s.memorizationRatings).forEach(id=>{s.memorizationRatings[id]=migrateMemorizationRating(s.memorizationRatings[id]);});s.quizDraft=migrateQuizDraft(s.quizDraft);s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches.map(migrateSubmissionBatch):[];s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
+function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.settings=s.settings&&typeof s.settings==='object'?Object.assign(defaultState().settings,s.settings||{}):defaultState().settings;s.settings.memorization=migrateMemorizationSettings(s.settings.memorization);s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});s.memorizationRatings=s.memorizationRatings&&typeof s.memorizationRatings==='object'?s.memorizationRatings:{};Object.keys(s.memorizationRatings).forEach(id=>{s.memorizationRatings[id]=migrateMemorizationRating(s.memorizationRatings[id]);});s.quizDraft=migrateQuizDraft(s.quizDraft);s.uiState=migrateUiState(s.uiState);s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches.map(migrateSubmissionBatch):[];s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
 function termStateNeedsMigration(s){return !('nextReview' in s)||!('lastCorrect' in s)||!('lastWrong' in s)||!('reviewPriority' in s)||!('knowledgeCorrect' in s)||!('knowledgeWrong' in s)||!('consecutiveIncorrect' in s)||!('weakReasons' in s);}
 function readTermState(id){id=String(id);if(!state.terms[id])return emptyTermState();if(termStateNeedsMigration(state.terms[id]))state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
 function getTermState(id){id=String(id);if(!state.terms[id]) state.terms[id]=emptyTermState();else if(termStateNeedsMigration(state.terms[id])) state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
@@ -256,7 +281,53 @@ function syncNavigationState(){
   $$('[data-nav]').forEach(b=>{const active=b.dataset.nav===currentView;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
 }
 function syncReviewTabs(){$$('[data-review-filter]').forEach(b=>{const active=b.dataset.reviewFilter===reviewFilter;b.classList.toggle('active',active);b.setAttribute('aria-selected',active?'true':'false');});}
-function navTo(view){currentView=(view==='study'||view==='terms')?'map':view;syncNavigationState();window.scrollTo({top:0,behavior:'smooth'});renderAll();}
+function uiState(){state.uiState=migrateUiState(state.uiState);return state.uiState;}
+function saveQuizSetupUiState(){
+  const ui=uiState(),getValue=id=>$(id)?.value||'';
+  ui.quizSetup={source:getValue('quizSource')||'terms',mode:getValue('quizMode')||'recommended',system:getValue('quizSystem'),length:getValue('quizLength')||'10',type:getValue('quizType')||'mixed'};
+  saveState(false);
+}
+function applyQuizSetupUiState(){
+  const setup=uiState().quizSetup,setIfValid=(id,value)=>{const el=$(id);if(el&&[...el.options].some(option=>option.value===String(value)))el.value=String(value);};
+  setIfValid('quizSource',setup.source);
+  setIfValid('quizMode',setup.mode);
+  setIfValid('quizSystem',setup.system);
+  setIfValid('quizLength',setup.length);
+  setIfValid('quizType',setup.type);
+}
+function saveKnowledgeUiState({save=false}={}){
+  const map=uiState().map;
+  map.scrollY=currentView==='map'?Math.max(0,window.scrollY||0):map.scrollY;
+  map.selectedTermId=selectedKnowledgeTermId||'';
+  map.mapMode=knowledgeMapMode||'overview';
+  map.expandedRelatedTermIds=[...knowledgeExpandedRelatedTerms].slice(0,80);
+  if(save)saveState(false);
+}
+function queueKnowledgeUiStateSave(){
+  if(currentView!=='map')return;
+  clearTimeout(knowledgeUiSaveTimer);
+  knowledgeUiSaveTimer=setTimeout(()=>saveKnowledgeUiState({save:true}),250);
+}
+function applyKnowledgeUiState(){
+  const map=uiState().map;
+  knowledgeMapMode=map.mapMode||knowledgeMapMode;
+  selectedKnowledgeTermId=map.selectedTermId||selectedKnowledgeTermId;
+  knowledgeExpandedRelatedTerms.clear();
+  map.expandedRelatedTermIds.forEach(id=>knowledgeExpandedRelatedTerms.add(id));
+  if(selectedKnowledgeTermId){const svc=getKnowledgeService(),term=svc?.getTerm(selectedKnowledgeTermId);if(term)expandKnowledgeCategoryPath(term.categoryId,svc);}
+}
+function restoreKnowledgeScroll(){
+  const y=Number(uiState().map.scrollY)||0;
+  if(currentView==='map'&&y>0)setTimeout(()=>window.scrollTo({top:y,behavior:'auto'}),0);
+}
+function navTo(view){
+  if(currentView==='map')saveKnowledgeUiState({save:true});
+  currentView=(view==='study'||view==='terms')?'map':view;
+  if(currentView==='map')applyKnowledgeUiState();
+  syncNavigationState();
+  renderAll();
+  if(currentView==='map')restoreKnowledgeScroll();else window.scrollTo({top:0,behavior:'smooth'});
+}
 function startDueReview(){const queue=priorityReviewTerms();if(queue.length>0){navTo('quiz');startQuiz({mode:'due',length:Math.min(20,Math.max(5,queue.length))});return;}navTo('review');}
 function showUpdateBanner(worker){pendingServiceWorker=worker;$('updateBanner').classList.remove('hidden');}
 function registerServiceWorker(){if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(refreshingForUpdate)return;refreshingForUpdate=true;location.reload();});navigator.serviceWorker.register('./sw.js').then(reg=>{if(reg.waiting&&navigator.serviceWorker.controller)showUpdateBanner(reg.waiting);reg.addEventListener('updatefound',()=>{const worker=reg.installing;if(!worker)return;worker.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)showUpdateBanner(worker);});});}).catch(()=>{});}
@@ -264,8 +335,10 @@ function registerServiceWorker(){if(!('serviceWorker' in navigator)||!location.p
 function setup(){
   $('todayLabel').textContent=new Intl.DateTimeFormat('ja-JP',{month:'long',day:'numeric',weekday:'short'}).format(new Date());
   getSystems().forEach(s=>{$('quizSystem').add(new Option(s,s));$('knowledgeSubjectFilter').add(new Option(s,s));});
+  applyQuizSetupUiState();
   syncNavigationState();syncReviewTabs();
   $$('[data-nav]').forEach(b=>b.addEventListener('click',()=>navTo(b.dataset.nav)));
+  ['quizSource','quizMode','quizSystem','quizLength','quizType'].forEach(id=>$(id).addEventListener('change',saveQuizSetupUiState));
   $('quickStartButton').addEventListener('click',()=>{navTo('quiz');$('quizSource').value='terms';$('quizLength').value='10';startQuiz({source:'terms',mode:'weak'});});
   $('recommendedQuizButton').addEventListener('click',()=>{navTo('quiz');$('quizSource').value='terms';$('quizMode').value='recommended';$('quizLength').value='10';startQuiz({source:'terms',mode:'recommended',length:10});});
   $('homeReviewButton').addEventListener('click',startDueReview);
@@ -273,11 +346,11 @@ function setup(){
   $('knowledgeSubjectFilter').addEventListener('change',renderKnowledgeMap);
   $('knowledgeStatusFilter').addEventListener('change',renderKnowledgeMap);
   $('knowledgeWritingFilter').addEventListener('change',renderKnowledgeMap);
-  $$('[data-map-mode]').forEach(button=>button.addEventListener('click',()=>{knowledgeMapMode=button.dataset.mapMode||'overview';renderKnowledgeMap();}));
+  $$('[data-map-mode]').forEach(button=>button.addEventListener('click',()=>{knowledgeMapMode=button.dataset.mapMode||'overview';renderKnowledgeMap();saveKnowledgeUiState({save:true});}));
   $('knowledgeExpandAllButton').addEventListener('click',()=>{const svc=getKnowledgeService();if(svc)svc.categories.filter(category=>!category.parentCategoryId).forEach(category=>knowledgeExpandedCategories.add(category.id));renderKnowledgeMap();});
   $('knowledgeCollapseAllButton').addEventListener('click',()=>{knowledgeExpandedCategories.clear();knowledgeCategoryLimits.clear();renderKnowledgeMap();});
   $('knowledgeResetViewButton').addEventListener('click',()=>{$('knowledgeSearch').value='';$('knowledgeSubjectFilter').value='';$('knowledgeStatusFilter').value='';$('knowledgeWritingFilter').value='';knowledgeCategoryLimits.clear();renderKnowledgeMap();});
-  $('focusRecommendationButton').addEventListener('click',()=>{const svc=getKnowledgeService(),rec=svc?.recommendNext(1)[0];if(rec){knowledgeMapMode='tree';selectedKnowledgeTermId=rec.term.id;expandKnowledgeCategoryPath(rec.term.categoryId,svc);renderKnowledgeMap();renderKnowledgeDetail(rec.term.id);}});
+  $('focusRecommendationButton').addEventListener('click',()=>{const svc=getKnowledgeService(),rec=svc?.recommendNext(1)[0];if(rec){knowledgeMapMode='tree';selectedKnowledgeTermId=rec.term.id;expandKnowledgeCategoryPath(rec.term.categoryId,svc);renderKnowledgeMap();renderKnowledgeDetail(rec.term.id);saveKnowledgeUiState({save:true});}});
   $('prepareUnsubmittedNotesButton').addEventListener('click',()=>prepareNoteSubmission('unsubmitted'));
   $('prepareSelectedNoteButton').addEventListener('click',()=>prepareNoteSubmission('selected'));
   $('includeSubmittedNotes').addEventListener('change',()=>renderNoteSubmissionPanel(getKnowledgeService()));
@@ -297,6 +370,8 @@ function setup(){
   document.addEventListener('compositionend',handleKnowledgeCompositionEnd,true);
   document.addEventListener('visibilitychange',handleMemorizationVisibilityChange);
   window.addEventListener('orientationchange',handleMemorizationOrientationChange);
+  window.addEventListener('popstate',handleAppPopState);
+  window.addEventListener('scroll',queueKnowledgeUiStateSave,{passive:true});
   $('appTermCount').textContent=`${TERMS.length}語`;
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;$('installButton').classList.remove('hidden');});
   $('installButton').addEventListener('click',async()=>{if(deferredInstall){deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;$('installButton').classList.add('hidden');}else{showToast('Safariの共有メニューから「ホーム画面に追加」を選択してください');}});
@@ -422,10 +497,14 @@ function renderKnowledgeCategory(category,svc,depth=0){
   const termHtml=shownTerms.map(term=>renderKnowledgeNode(term,svc)).join('');
   return `<section class="knowledge-category" data-depth="${depth}"><button class="knowledge-category-toggle" data-map-category-id="${esc(category.id)}" type="button" aria-expanded="${open?'true':'false'}"><span><strong>${esc(category.name)}</strong><small>${progress.termCount}語・平均 ${progress.masteryScore}%・要復習 ${counts.review}・苦手 ${counts.weak}</small></span><b aria-hidden="true">${open?'−':'+'}</b></button>${open?`<div class="knowledge-children">${childHtml}${termHtml?`<div class="knowledge-term-list">${termHtml}</div>`:''}${remaining>0?`<button class="secondary full compact" data-map-load-category="${esc(category.id)}" type="button">このカテゴリをさらに${Math.min(48,remaining)}語表示（残り${remaining}語）</button>`:''}</div>`:''}</section>`;
 }
+function knowledgeHashTermId(){
+  const hash=decodeURIComponent(location.hash||'');
+  return hash.startsWith('#term-')?hash.slice(6):'';
+}
 function renderKnowledgeNode(term,svc){
-  const progress=svc.progressForTerm(term.id),selected=selectedKnowledgeTermId===term.id?' selected':'',appMissing=term.appTermId?'':'・未接続';
+  const progress=svc.progressForTerm(term.id),selected=selectedKnowledgeTermId===term.id?' selected':'',highlighted=highlightedKnowledgeTermId===term.id||knowledgeHashTermId()===term.id?' is-highlighted':'',appMissing=term.appTermId?'':'・未接続';
   const writing=writingProgressForTerm(term),test=testProgressForTerm(term,svc);
-  const node=`<button class="knowledge-node state-${esc(progress.status)}${selected}" data-map-term-id="${esc(term.id)}" type="button" role="treeitem" aria-expanded="${selected?'true':'false'}" aria-label="${esc(term.name)} 記述 ${esc(writing.label)} テスト ${esc(test.label)}"><span class="knowledge-node-marker" aria-hidden="true">${esc(progress.statusMarker)}</span><span class="knowledge-node-title"><strong>${esc(term.name)}</strong><small>記述:${esc(writing.label)}・テスト:${esc(test.summary)}${appMissing}</small></span><span class="knowledge-node-score">${progress.masteryScore}%</span></button>`;
+  const node=`<button id="term-${esc(term.id)}" class="knowledge-node state-${esc(progress.status)}${selected}${highlighted}" data-map-term-id="${esc(term.id)}" type="button" role="treeitem" aria-expanded="${selected?'true':'false'}" aria-label="${esc(term.name)} 記述 ${esc(writing.label)} テスト ${esc(test.label)}"><span class="knowledge-node-marker" aria-hidden="true">${esc(progress.statusMarker)}</span><span class="knowledge-node-title"><strong>${esc(term.name)}</strong><small>記述:${esc(writing.label)}・テスト:${esc(test.summary)}${appMissing}</small></span><span class="knowledge-node-score">${progress.masteryScore}%</span></button>`;
   return selected?node+renderKnowledgeInlineDetail(term,svc):node;
 }
 function knowledgeWritingQuestion(term,svc){
@@ -454,9 +533,35 @@ function renderKnowledgeNoteSection(term,svc,heading='h5'){
   const record=getTermNoteRecord(term,false),review=record.reviewStatus||'unreviewed';
   return `<section class="map-detail-section knowledge-note-section"><div class="note-section-head"><${heading}>自分の言葉でまとめる</${heading}><div class="note-inline-nav" role="group" aria-label="用語移動"><button class="secondary" data-note-move="-1" data-note-move-term="${esc(term.id)}" type="button">↑ 前へ</button><button class="secondary" data-note-move="1" data-note-move-term="${esc(term.id)}" type="button">↓ 次へ</button></div></div><p class="knowledge-note-question">${esc(knowledgeWritingQuestion(term,svc))}</p><div class="memorization-note-wrap" data-memorization-term="${esc(term.id)}"><textarea class="knowledge-note-area" data-map-note-term="${esc(term.id)}" placeholder="定義・仕組み・FEで重要な点を、自分の言葉で書いてください">${esc(readKnowledgeTermNote(term))}</textarea><div class="memorization-cover" data-memorization-cover="${esc(term.id)}" aria-hidden="true"><strong>あなたの記述は隠れています</strong><span>端末を傾ける、または「現在の答えを見る」を長押ししてください。</span></div></div><p class="help" data-map-note-status>目安: 1〜3文。完璧でなくても保存できます。後でChatGPTにまとめて確認できます。</p>${renderMemorizationRatingSection(term)}<div class="note-review-grid"><label>ChatGPT確認結果<select data-note-review-term="${esc(term.id)}">${noteReviewOption('unreviewed','未確認',review)}${noteReviewOption('correct','正しい',review)}${noteReviewOption('needs_fix','一部修正が必要',review)}${noteReviewOption('insufficient','理解不足',review)}</select></label><label>修正メモ<textarea class="feedback-note-area" data-note-feedback-term="${esc(term.id)}" placeholder="ChatGPTの指摘や直すポイントを書く">${esc(record.feedbackMemo||'')}</textarea></label></div></section>`;
 }
+function splitRelatedNames(value){return String(value||'').split(/[\/、,，]/).map(name=>name.trim()).filter(Boolean);}
+function mapTermByName(svc,name){const key=normalize(name);return svc.terms.find(term=>normalize(term.name)===key)||null;}
+function relatedEntriesForTerm(term,svc,limit=24){
+  const prereqIds=new Set(svc.getPrerequisites(term.id).map(item=>item.id));
+  const seen=new Set();
+  const entries=[];
+  const addEntry=(name,mapTerm=null)=>{
+    const key=normalize(name);if(!key||seen.has(key))return;
+    seen.add(key);
+    if(mapTerm&&mapTerm.id!==term.id&&!prereqIds.has(mapTerm.id))entries.push({name:mapTerm.name,term:mapTerm,registered:true});
+    else if(!mapTerm)entries.push({name,term:null,registered:false});
+  };
+  svc.getConnectedTerms(term.id).filter(item=>!prereqIds.has(item.id)).forEach(item=>addEntry(item.name,item));
+  splitRelatedNames(term.appTerm?.['関連語']).forEach(name=>addEntry(name,mapTermByName(svc,name)));
+  return entries.slice(0,limit);
+}
+function relatedEntryHtml(entry,svc){
+  if(!entry.registered||!entry.term)return `<div class="related-term-item missing" aria-disabled="true"><div><strong>${esc(entry.name)}</strong><small>マップ未登録</small></div><span class="badge gray">未登録</span></div>`;
+  const progress=svc.progressForTerm(entry.term.id),total=progress.totalAttempts,accuracy=total?Math.round(progress.correctAttempts/total*100):0;
+  return `<button class="related-term-item text-button" data-map-related-jump="${esc(entry.term.id)}" type="button"><div><strong>${esc(entry.term.name)}</strong><small>${esc(progress.statusLabel)} / 重要${entry.term.importance} / 難易度${entry.term.difficulty} / 正答率${accuracy}%</small></div><span class="knowledge-node-marker">${esc(progress.statusMarker)}</span></button>`;
+}
+function renderRelatedAccordion(term,svc,heading='h5'){
+  const open=knowledgeExpandedRelatedTerms.has(term.id),entries=relatedEntriesForTerm(term,svc,24);
+  if(!open)return '';
+  return `<section class="map-detail-section related-accordion" data-related-panel="${esc(term.id)}"><${heading}>関連用語</${heading}><div class="related-term-list" aria-label="${esc(term.name)}の関連用語">${entries.length?entries.map(entry=>relatedEntryHtml(entry,svc)).join(''):'<p class="empty compact">関連用語は登録されていません</p>'}</div></section>`;
+}
 function renderKnowledgeInlineDetail(term,svc){
-  const progress=svc.progressForTerm(term.id),writing=writingProgressForTerm(term),test=testProgressForTerm(term,svc),prereq=svc.getPrerequisites(term.id),connected=svc.getConnectedTerms(term.id).filter(x=>!prereq.some(p=>p.id===x.id)),reasons=svc.weakReasons(term.id);
-  return `<article class="knowledge-inline-detail" data-map-inline-detail="${esc(term.id)}" aria-label="${esc(term.name)}の詳細"><div class="knowledge-inline-head"><div><h4>${esc(term.name)}</h4><p class="lead-copy">${esc(term.shortDescription)}</p></div><button class="knowledge-inline-close" data-map-collapse-detail type="button" aria-label="詳細を閉じる"><span aria-hidden="true">×</span></button></div><div class="progress-split"><div><span>記述</span><div class="progress-track"><span style="width:${writing.score}%"></span></div><small>${esc(writing.label)}</small></div><div><span>テスト</span><div class="progress-track"><span style="width:${test.score}%"></span></div><small>${esc(test.summary)}</small></div></div><div class="badges"><span class="badge ${esc(writing.className)}">記述: ${esc(writing.label)}</span><span class="badge ${esc(test.className)}">テスト: ${esc(test.label)}</span><span class="badge gray">重要度 ${term.importance}</span><span class="badge gray">難易度 ${term.difficulty}</span>${progress.nextReviewAt?`<span class="badge ${progress.nextReviewAt<=localDate()?'bad':'gray'}">次回 ${esc(formatReviewDate(progress.nextReviewAt))}</span>`:''}</div><section class="map-detail-section"><h5>詳しい説明</h5><p>${esc(term.detailedDescription)}</p>${term.example?`<p class="help"><b>具体例:</b> ${esc(term.example)}</p>`:''}</section><section class="map-detail-section"><h5>前提用語</h5><div class="map-relation-list">${prereq.length?prereq.slice(0,8).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">前提はありません。</span>'}</div></section><section class="map-detail-section"><h5>関連用語</h5><div class="map-relation-list">${connected.length?connected.slice(0,8).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">関連語はまだ登録されていません。</span>'}</div></section>${reasons.length?`<section class="map-detail-section"><h5>苦手理由</h5><p class="help">${esc(reasons.join('、'))}</p></section>`:''}<div class="knowledge-inline-actions single"><button class="secondary" data-map-chatgpt-term="${esc(term.id)}" type="button">ChatGPT</button></div>${renderKnowledgeNoteSection(term,svc,'h5')}<div class="knowledge-inline-actions"><button class="primary" data-map-practice-term="${esc(term.id)}" type="button" ${term.appTermId?'':'disabled'}>問題</button><button class="secondary" data-map-related-practice-term="${esc(term.id)}" type="button">関連用語</button></div><p class="help">ChatGPTボタンは質問文をコピーしてChatGPTを開きます。APIキーや詳しい学習履歴は使いません。</p></article>`;
+  const progress=svc.progressForTerm(term.id),writing=writingProgressForTerm(term),test=testProgressForTerm(term,svc),prereq=svc.getPrerequisites(term.id),reasons=svc.weakReasons(term.id);
+  return `<article class="knowledge-inline-detail" data-map-inline-detail="${esc(term.id)}" aria-label="${esc(term.name)}の詳細"><div class="knowledge-inline-head"><div><h4>${esc(term.name)}</h4><p class="lead-copy">${esc(term.shortDescription)}</p></div><button class="knowledge-inline-close" data-map-collapse-detail type="button" aria-label="詳細を閉じる"><span aria-hidden="true">×</span></button></div><div class="progress-split"><div><span>記述</span><div class="progress-track"><span style="width:${writing.score}%"></span></div><small>${esc(writing.label)}</small></div><div><span>テスト</span><div class="progress-track"><span style="width:${test.score}%"></span></div><small>${esc(test.summary)}</small></div></div><div class="badges"><span class="badge ${esc(writing.className)}">記述: ${esc(writing.label)}</span><span class="badge ${esc(test.className)}">テスト: ${esc(test.label)}</span><span class="badge gray">重要度 ${term.importance}</span><span class="badge gray">難易度 ${term.difficulty}</span>${progress.nextReviewAt?`<span class="badge ${progress.nextReviewAt<=localDate()?'bad':'gray'}">次回 ${esc(formatReviewDate(progress.nextReviewAt))}</span>`:''}</div><section class="map-detail-section"><h5>詳しい説明</h5><p>${esc(term.detailedDescription)}</p>${term.example?`<p class="help"><b>具体例:</b> ${esc(term.example)}</p>`:''}</section><section class="map-detail-section"><h5>前提用語</h5><div class="map-relation-list">${prereq.length?prereq.slice(0,8).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">前提はありません。</span>'}</div></section>${reasons.length?`<section class="map-detail-section"><h5>苦手理由</h5><p class="help">${esc(reasons.join('、'))}</p></section>`:''}<div class="knowledge-inline-actions single"><button class="secondary" data-map-chatgpt-term="${esc(term.id)}" type="button">ChatGPT</button></div>${renderKnowledgeNoteSection(term,svc,'h5')}<div class="knowledge-inline-actions"><button class="primary" data-map-practice-term="${esc(term.id)}" type="button" ${term.appTermId?'':'disabled'}>問題</button><button class="secondary" data-map-related-toggle="${esc(term.id)}" type="button" aria-expanded="${knowledgeExpandedRelatedTerms.has(term.id)?'true':'false'}">関連用語 ${knowledgeExpandedRelatedTerms.has(term.id)?'▲':'▼'}</button></div>${renderRelatedAccordion(term,svc,'h5')}<p class="help">ChatGPTボタンは質問文をコピーしてChatGPTを開きます。APIキーや詳しい学習履歴は使いません。</p></article>`;
 }
 function renderKnowledgeOverview(svc,summary){
   const panel=$('knowledgeOverviewPanel');
@@ -467,14 +572,94 @@ function renderKnowledgeOverview(svc,summary){
   const subjects=svc.subjects.slice().sort((a,b)=>a.displayOrder-b.displayOrder);
   panel.innerHTML=`<div class="overview-head"><div><p class="eyebrow">Overview</p><h3>全体図</h3><p class="help">基本情報技術者の用語を、分野と大分類ごとの進み具合で整理しています。</p></div><strong>${summary.termCount}語</strong></div><div class="knowledge-overview-grid">${subjects.map(subject=>{const p=svc.subjectProgress(subject.id),c=p.statusCounts;return `<article class="overview-card"><span>${esc(subject.name)}</span><strong>${p.masteryScore}%</strong><div class="progress-track"><span style="width:${p.masteryScore}%"></span></div><small>${p.termCount}語・未学習 ${c.unlearned}・苦手 ${c.weak}・習得 ${c.mastered}</small></article>`;}).join('')}</div><div class="overview-subject-list">${tree.map(node=>{const subjectProgress=svc.subjectProgress(node.subject.id);return `<section class="overview-subject-section"><div class="overview-subject-heading"><div><h3>${esc(node.subject.name)}</h3><small>${subjectProgress.termCount}語・平均 ${subjectProgress.masteryScore}%</small></div><b>${subjectProgress.masteryScore}%</b></div><div class="overview-category-grid">${node.categories.map(category=>{const p=svc.categoryProgress(category.id),c=p.statusCounts;return `<button class="overview-category text-button" data-map-overview-category="${esc(category.id)}" type="button"><span><strong>${esc(category.name)}</strong><small>${p.termCount}語・要復習 ${c.review}・苦手 ${c.weak}</small></span><b>${p.masteryScore}%</b></button>`;}).join('')}</div></section>`;}).join('')}</div>`;
 }
+function knowledgeHistorySnapshot(){
+  return {view:currentView,scrollY:window.scrollY||0,selectedTermId:selectedKnowledgeTermId,mapMode:knowledgeMapMode,expandedRelatedTermIds:[...knowledgeExpandedRelatedTerms]};
+}
+function restoreKnowledgeSnapshot(snapshot){
+  if(!snapshot||typeof snapshot!=='object')return false;
+  currentView=snapshot.view||'map';
+  selectedKnowledgeTermId=String(snapshot.selectedTermId||'');
+  knowledgeMapMode=snapshot.mapMode||'tree';
+  knowledgeExpandedRelatedTerms.clear();
+  (Array.isArray(snapshot.expandedRelatedTermIds)?snapshot.expandedRelatedTermIds:[]).forEach(id=>knowledgeExpandedRelatedTerms.add(String(id)));
+  if(selectedKnowledgeTermId){const svc=getKnowledgeService(),term=svc?.getTerm(selectedKnowledgeTermId);if(term)expandKnowledgeCategoryPath(term.categoryId,svc);}
+  syncNavigationState();
+  renderAll();
+  setTimeout(()=>window.scrollTo({top:Number(snapshot.scrollY)||0,behavior:'auto'}),0);
+  saveKnowledgeUiState({save:true});
+  return true;
+}
+function handleAppPopState(event){if(restoreKnowledgeSnapshot(event.state?.feLearningReturn))return;}
+function pushKnowledgeJumpHistory(targetTermId){
+  if(!history?.pushState||!history?.replaceState)return;
+  try{
+    history.replaceState(Object.assign({},history.state||{},{feLearningReturn:knowledgeHistorySnapshot()}),'',location.href);
+    const url=new URL(location.href);url.hash=`term-${encodeURIComponent(targetTermId)}`;
+    history.pushState({feLearningJumpTarget:targetTermId},'',url);
+  }catch(err){}
+}
+function revealKnowledgeTermForJump(term,svc){
+  if(knowledgeTermVisible(term,svc))return;
+  $('knowledgeSearch').value='';
+  $('knowledgeStatusFilter').value='';
+  $('knowledgeWritingFilter').value='';
+  $('knowledgeSubjectFilter').value='';
+}
+function selectKnowledgeTerm(termId,{scroll=false,highlight=false,recordHistory=false}={}){
+  const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term){showToast('マップ内に対象用語が見つかりません');return false;}
+  if(recordHistory)pushKnowledgeJumpHistory(term.id);
+  if(recordHistory||scroll||highlight)revealKnowledgeTermForJump(term,svc);
+  knowledgeMapMode='tree';
+  selectedKnowledgeTermId=term.id;
+  if(highlight)highlightedKnowledgeTermId=term.id;
+  clearMemorizationReveal();
+  expandKnowledgeCategoryPath(term.categoryId,svc);
+  renderKnowledgeMap();
+  renderKnowledgeDetail(term.id);
+  saveKnowledgeUiState({save:true});
+  if(scroll||highlight){
+    highlightKnowledgeTerm(term.id,{scroll,highlight});
+    setTimeout(()=>highlightKnowledgeTerm(term.id,{scroll:false,highlight}),120);
+  }
+  return true;
+}
+function highlightKnowledgeTerm(termId,{scroll=true,highlight=true}={}){
+  const node=qs(`.knowledge-node[data-map-term-id="${CSS.escape(termId)}"]`);
+  if(!node){showToast('マップ内に対象用語が見つかりません');return;}
+  if(scroll)node.scrollIntoView({behavior:'smooth',block:'center'});
+  if(!highlight)return;
+  highlightedKnowledgeTermId=termId;
+  clearTimeout(knowledgeHighlightTimer);
+  $$('.knowledge-node.is-highlighted').forEach(item=>item.classList.remove('is-highlighted'));
+  node.classList.add('is-highlighted');
+  knowledgeHighlightTimer=setTimeout(()=>{highlightedKnowledgeTermId='';node.classList.remove('is-highlighted');},2600);
+}
+function jumpToRelatedKnowledgeTerm(termId){
+  const id=String(termId||'');
+  if(!selectKnowledgeTerm(id,{scroll:true,recordHistory:true}))return;
+  highlightedKnowledgeTermId=id;
+  renderKnowledgeMap();
+  renderKnowledgeDetail(id);
+  setTimeout(()=>highlightKnowledgeTerm(id,{scroll:true,highlight:true}),80);
+}
+function toggleRelatedTerms(termId){
+  termId=String(termId||'');
+  if(!termId)return;
+  if(knowledgeExpandedRelatedTerms.has(termId))knowledgeExpandedRelatedTerms.delete(termId);else knowledgeExpandedRelatedTerms.add(termId);
+  const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(term)expandKnowledgeCategoryPath(term.categoryId,svc);
+  renderKnowledgeMap();
+  if(selectedKnowledgeTermId)renderKnowledgeDetail(selectedKnowledgeTermId);
+  saveKnowledgeUiState({save:true});
+}
 function bindKnowledgeMapActions(){
-  $$('[data-map-term-id]').forEach(button=>{button.onclick=()=>{knowledgeMapMode='tree';selectedKnowledgeTermId=button.dataset.mapTermId;clearMemorizationReveal();const svc=getKnowledgeService(),term=svc?.getTerm(selectedKnowledgeTermId);if(term)expandKnowledgeCategoryPath(term.categoryId,svc);renderKnowledgeMap();renderKnowledgeDetail(selectedKnowledgeTermId);};});
+  $$('[data-map-term-id]').forEach(button=>{button.onclick=()=>selectKnowledgeTerm(button.dataset.mapTermId);});
   $$('[data-map-category-id]').forEach(button=>button.onclick=()=>{const id=button.dataset.mapCategoryId;if(knowledgeExpandedCategories.has(id))knowledgeExpandedCategories.delete(id);else knowledgeExpandedCategories.add(id);renderKnowledgeMap();});
   $$('[data-map-load-category]').forEach(button=>button.onclick=()=>{const id=button.dataset.mapLoadCategory;knowledgeCategoryLimits.set(id,(knowledgeCategoryLimits.get(id)||48)+48);knowledgeExpandedCategories.add(id);renderKnowledgeMap();});
   $$('[data-map-overview-category]').forEach(button=>button.onclick=()=>{const svc=getKnowledgeService(),id=button.dataset.mapOverviewCategory;knowledgeMapMode='tree';expandKnowledgeCategoryPath(id,svc);renderKnowledgeMap();setTimeout(()=>qs(`[data-map-category-id="${CSS.escape(id)}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),0);});
-  $$('[data-map-collapse-detail]').forEach(button=>button.onclick=()=>{selectedKnowledgeTermId='';clearMemorizationReveal();renderKnowledgeMap();const panel=$('knowledgeDetailPanel');if(panel)panel.innerHTML='<p class="empty">用語ノードを選択すると詳細を表示します。</p>';});
+  $$('[data-map-collapse-detail]').forEach(button=>button.onclick=()=>{selectedKnowledgeTermId='';clearMemorizationReveal();renderKnowledgeMap();const panel=$('knowledgeDetailPanel');if(panel)panel.innerHTML='<p class="empty">用語ノードを選択すると詳細を表示します。</p>';saveKnowledgeUiState({save:true});});
   $$('[data-map-practice-term]').forEach(button=>button.onclick=()=>startKnowledgeTermPractice(button.dataset.mapPracticeTerm,false));
-  $$('[data-map-related-practice-term]').forEach(button=>button.onclick=()=>startKnowledgeTermPractice(button.dataset.mapRelatedPracticeTerm,true));
+  $$('[data-map-related-toggle]').forEach(button=>button.onclick=()=>toggleRelatedTerms(button.dataset.mapRelatedToggle));
+  $$('[data-map-related-jump]').forEach(button=>button.onclick=()=>jumpToRelatedKnowledgeTerm(button.dataset.mapRelatedJump));
   $$('[data-map-chatgpt-term]').forEach(button=>button.onclick=()=>openKnowledgeTermChatGPT(button.dataset.mapChatgptTerm));
   $$('[data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
   $$('[data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
@@ -487,11 +672,11 @@ function bindKnowledgeMapActions(){
 }
 function renderKnowledgeDetail(termId){
   const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term)return;
-  const progress=svc.progressForTerm(term.id),writing=writingProgressForTerm(term),test=testProgressForTerm(term,svc),prereq=svc.getPrerequisites(term.id),connected=svc.getConnectedTerms(term.id).filter(x=>!prereq.some(p=>p.id===x.id)),reasons=svc.weakReasons(term.id),relations=svc.getRelations(term.id);
-  $('knowledgeDetailPanel').innerHTML=`<div class="map-detail-head"><div><p class="eyebrow">${esc((term.appTerm||{})['系']||'テクノロジ系')} / ${esc((term.appTerm||{})['中分類']||'知識マップ')}</p><h3>${esc(term.name)}</h3><p class="subtle">記述 ${esc(writing.label)}・テスト ${esc(test.label)}・重要度${term.importance}・難易度${term.difficulty}</p></div><div class="map-detail-score"><strong>${progress.masteryScore}%</strong><small>テスト習熟</small></div></div><div class="progress-split"><div><span>記述</span><div class="progress-track"><span style="width:${writing.score}%"></span></div><small>${esc(writing.label)}</small></div><div><span>テスト</span><div class="progress-track"><span style="width:${test.score}%"></span></div><small>${esc(test.summary)}</small></div></div><div class="badges"><span class="badge ${esc(writing.className)}">記述: ${esc(writing.label)}</span><span class="badge ${esc(test.className)}">テスト: ${esc(test.label)}</span><span class="badge gray">正解 ${formatProgressCount(progress.correctAttempts)}</span><span class="badge gray">誤答 ${formatProgressCount(progress.wrongAttempts)}</span>${progress.nextReviewAt?`<span class="badge ${progress.nextReviewAt<=localDate()?'bad':'gray'}">次回 ${esc(formatReviewDate(progress.nextReviewAt))}</span>`:''}</div><section class="map-detail-section"><h4>短い説明</h4><p class="lead-copy">${esc(term.shortDescription)}</p></section><section class="map-detail-section"><h4>詳しい説明</h4><p>${esc(term.detailedDescription)}</p><p class="help"><b>具体例:</b> ${esc(term.example)}</p></section>${renderKnowledgeNoteSection(term,svc,'h4')}<section class="map-detail-section"><h4>前提用語</h4><div class="map-relation-list">${prereq.length?prereq.map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">前提はありません。</span>'}</div></section><section class="map-detail-section"><h4>関連用語</h4><div class="map-relation-list">${connected.length?connected.slice(0,12).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">関連語はまだ登録されていません。</span>'}</div></section><section class="map-detail-section"><h4>苦手理由</h4><p class="help">${reasons.length?esc(reasons.join('、')):'現在は明確な苦手理由はありません。'}</p></section><section class="map-detail-section"><h4>関係タイプ</h4><div class="badges">${relations.length?relations.map(r=>`<span class="badge gray">${esc(relationLabels[r.relationType]||r.relationType)}: ${esc(svc.getTerm(r.targetTermId)?.name||r.targetTermId)}</span>`).join(''):'<span class="badge gray">登録なし</span>'}</div></section><div class="dialog-actions"><button id="mapChatGPTButton" class="secondary" type="button">ChatGPTに聞く</button><button id="mapPracticeButton" class="primary" type="button" ${term.appTermId?'':'disabled'}>確認問題を解く</button><button id="mapRelatedPracticeButton" class="secondary" type="button">関連用語も練習</button></div>`;
-  $$('.map-related-term').forEach(button=>button.onclick=()=>{selectedKnowledgeTermId=button.dataset.mapTermId;clearMemorizationReveal();const term=svc.getTerm(selectedKnowledgeTermId);if(term)expandKnowledgeCategoryPath(term.categoryId,svc);renderKnowledgeMap();renderKnowledgeDetail(button.dataset.mapTermId);});
+  const progress=svc.progressForTerm(term.id),writing=writingProgressForTerm(term),test=testProgressForTerm(term,svc),prereq=svc.getPrerequisites(term.id),reasons=svc.weakReasons(term.id),relations=svc.getRelations(term.id),relatedOpen=knowledgeExpandedRelatedTerms.has(term.id);
+  $('knowledgeDetailPanel').innerHTML=`<div class="map-detail-head"><div><p class="eyebrow">${esc((term.appTerm||{})['系']||'テクノロジ系')} / ${esc((term.appTerm||{})['中分類']||'知識マップ')}</p><h3>${esc(term.name)}</h3><p class="subtle">記述 ${esc(writing.label)}・テスト ${esc(test.label)}・重要度${term.importance}・難易度${term.difficulty}</p></div><div class="map-detail-score"><strong>${progress.masteryScore}%</strong><small>テスト習熟</small></div></div><div class="progress-split"><div><span>記述</span><div class="progress-track"><span style="width:${writing.score}%"></span></div><small>${esc(writing.label)}</small></div><div><span>テスト</span><div class="progress-track"><span style="width:${test.score}%"></span></div><small>${esc(test.summary)}</small></div></div><div class="badges"><span class="badge ${esc(writing.className)}">記述: ${esc(writing.label)}</span><span class="badge ${esc(test.className)}">テスト: ${esc(test.label)}</span><span class="badge gray">正解 ${formatProgressCount(progress.correctAttempts)}</span><span class="badge gray">誤答 ${formatProgressCount(progress.wrongAttempts)}</span>${progress.nextReviewAt?`<span class="badge ${progress.nextReviewAt<=localDate()?'bad':'gray'}">次回 ${esc(formatReviewDate(progress.nextReviewAt))}</span>`:''}</div><section class="map-detail-section"><h4>短い説明</h4><p class="lead-copy">${esc(term.shortDescription)}</p></section><section class="map-detail-section"><h4>詳しい説明</h4><p>${esc(term.detailedDescription)}</p><p class="help"><b>具体例:</b> ${esc(term.example)}</p></section>${renderKnowledgeNoteSection(term,svc,'h4')}<section class="map-detail-section"><h4>前提用語</h4><div class="map-relation-list">${prereq.length?prereq.map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">前提はありません。</span>'}</div></section><section class="map-detail-section"><h4>苦手理由</h4><p class="help">${reasons.length?esc(reasons.join('、')):'現在は明確な苦手理由はありません。'}</p></section><section class="map-detail-section"><h4>関係タイプ</h4><div class="badges">${relations.length?relations.map(r=>`<span class="badge gray">${esc(relationLabels[r.relationType]||r.relationType)}: ${esc(svc.getTerm(r.targetTermId)?.name||r.targetTermId)}</span>`).join(''):'<span class="badge gray">登録なし</span>'}</div></section><div class="dialog-actions"><button id="mapChatGPTButton" class="secondary" type="button">ChatGPTに聞く</button><button id="mapPracticeButton" class="primary" type="button" ${term.appTermId?'':'disabled'}>確認問題を解く</button><button id="mapRelatedToggleButton" class="secondary" type="button" aria-expanded="${relatedOpen?'true':'false'}">関連用語 ${relatedOpen?'▲':'▼'}</button></div>${renderRelatedAccordion(term,svc,'h4')}`;
+  $$('#knowledgeDetailPanel [data-map-related-jump]').forEach(button=>button.onclick=()=>jumpToRelatedKnowledgeTerm(button.dataset.mapRelatedJump));
   $('mapPracticeButton').onclick=()=>startKnowledgeTermPractice(term.id,false);
-  $('mapRelatedPracticeButton').onclick=()=>startKnowledgeTermPractice(term.id,true);
+  $('mapRelatedToggleButton').onclick=()=>toggleRelatedTerms(term.id);
   $('mapChatGPTButton').onclick=()=>openKnowledgeTermChatGPT(term.id);
   $$('#knowledgeDetailPanel [data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
   $$('#knowledgeDetailPanel [data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
@@ -502,7 +687,7 @@ function renderKnowledgeDetail(termId){
   observeMemorizationTerms();
   applyMemorizationCovers();
 }
-function relationTermButton(term,svc){const p=svc.progressForTerm(term.id);return `<button class="badge gray map-related-term" data-map-term-id="${esc(term.id)}" type="button">${esc(p.statusMarker)} ${esc(term.name)}</button>`;}
+function relationTermButton(term,svc){const p=svc.progressForTerm(term.id);return `<button class="badge gray map-related-term" data-map-related-jump="${esc(term.id)}" type="button">${esc(p.statusMarker)} ${esc(term.name)}</button>`;}
 function normalizeNoteContent(text){return String(text||'').replace(/\r\n?/g,'\n').replace(/[ \t]+/g,' ').trim();}
 function compactNoteLength(text){return normalizeNoteContent(text).replace(/\s/g,'').length;}
 function simpleHash(text){let h=2166136261,s=normalizeNoteContent(text);for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(16);}
