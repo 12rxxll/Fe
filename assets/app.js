@@ -53,6 +53,7 @@ let pendingFeedbackApplyTermId = '';
 let memorizationRotationPauseUntil = 0;
 let knowledgeUiSaveTimer = null;
 let settingsAutoSaveTimer = null;
+let keyboardStateTimer = null;
 const memorizationRuntime = {
   enabled:false,
   sensorWanted:false,
@@ -411,6 +412,32 @@ function startDueReview(){const queue=priorityReviewTerms();if(queue.length>0){n
 function showUpdateBanner(worker){pendingServiceWorker=worker;$('updateBanner').classList.remove('hidden');}
 function registerServiceWorker(){if(!('serviceWorker' in navigator)||!location.protocol.startsWith('http'))return;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(refreshingForUpdate)return;refreshingForUpdate=true;location.reload();});navigator.serviceWorker.register('./sw.js').then(reg=>{if(reg.waiting&&navigator.serviceWorker.controller)showUpdateBanner(reg.waiting);reg.addEventListener('updatefound',()=>{const worker=reg.installing;if(!worker)return;worker.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)showUpdateBanner(worker);});});}).catch(()=>{});}
 
+function isKeyboardInput(el){
+  if(!el||el.disabled||el.readOnly)return false;
+  if(el.isContentEditable)return true;
+  const tag=String(el.tagName||'').toLowerCase();
+  if(tag==='textarea')return true;
+  if(tag!=='input')return false;
+  const type=String(el.type||'text').toLowerCase();
+  return !['button','checkbox','color','file','hidden','image','radio','range','reset','submit'].includes(type);
+}
+function updateKeyboardOpenState(){
+  const active=document.activeElement;
+  const shouldHide=window.innerWidth<=700&&isKeyboardInput(active);
+  document.body.classList.toggle('keyboard-open',shouldHide);
+}
+function scheduleKeyboardOpenState(delay=60){
+  clearTimeout(keyboardStateTimer);
+  keyboardStateTimer=setTimeout(updateKeyboardOpenState,delay);
+}
+function bindKeyboardAwareNav(){
+  document.addEventListener('focusin',event=>{if(isKeyboardInput(event.target))scheduleKeyboardOpenState(80);});
+  document.addEventListener('focusout',()=>scheduleKeyboardOpenState(140));
+  window.visualViewport?.addEventListener('resize',()=>scheduleKeyboardOpenState(0));
+  window.visualViewport?.addEventListener('scroll',()=>scheduleKeyboardOpenState(0));
+  window.addEventListener('resize',()=>scheduleKeyboardOpenState(0));
+}
+
 function setup(){
   $('todayLabel').textContent=new Intl.DateTimeFormat('ja-JP',{month:'long',day:'numeric',weekday:'short'}).format(new Date());
   getSystems().forEach(s=>{$('quizSystem').add(new Option(s,s));$('knowledgeSubjectFilter').add(new Option(s,s));$('reviewSystemFilter')?.add(new Option(s,s));});
@@ -462,6 +489,7 @@ function setup(){
   document.addEventListener('keydown',handleKnowledgeNoteKeydown);
   document.addEventListener('compositionstart',handleKnowledgeCompositionStart,true);
   document.addEventListener('compositionend',handleKnowledgeCompositionEnd,true);
+  bindKeyboardAwareNav();
   document.addEventListener('visibilitychange',handleMemorizationVisibilityChange);
   window.addEventListener('orientationchange',handleMemorizationOrientationChange);
   window.addEventListener('popstate',handleAppPopState);

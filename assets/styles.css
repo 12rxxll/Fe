@@ -2728,6 +2728,16 @@ input[type="date"]::-webkit-date-and-time-value {
   padding: 8px 8px calc(8px + var(--safe-bottom));
   box-shadow: 0 -10px 28px rgba(24, 34, 48, .08);
   backdrop-filter: blur(18px);
+  transition: transform .2s ease, opacity .16s ease;
+  will-change: transform;
+}
+
+@media (max-width: 700px) {
+  body.keyboard-open .bottom-nav {
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(calc(100% + var(--safe-bottom) + 12px));
+  }
 }
 
 .bottom-nav button {
