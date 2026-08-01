@@ -9,7 +9,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./assets/styles.css?v=2.1.4">
+  <link rel="stylesheet" href="./assets/styles.css?v=2.1.5">
   <title>FE Learning OS</title>
 </head>
 <body>
@@ -139,12 +139,24 @@
         <div id="writingSubjectSummary" class="analytics-list"></div>
       </section>
       <section class="panel map-chatgpt-panel chatgpt-review-panel">
-        <div class="panel-title-row"><h3>ChatGPT確認</h3><strong id="noteBatchReadyCount" class="subtle">0語</strong></div>
+        <div class="panel-title-row"><h3>ChatGPTまとめ確認</h3><strong id="noteBatchReadyCount" class="subtle">0語</strong></div>
+        <div id="chatgptBatchStats" class="chatgpt-batch-stats" aria-label="ChatGPT確認の対象件数"></div>
         <p id="noteBatchSummary" class="help"></p>
         <label class="checkbox-row"><input id="includeSubmittedNotes" type="checkbox">前回送信済みの同一内容も含める</label>
+        <div class="chatgpt-target-picker">
+          <div class="panel-title-row compact"><h4>対象を選ぶ</h4><span class="subtle">分野・用語</span></div>
+          <label>分野<select id="chatgptSubjectFilter"><option value="">すべての分野</option></select></label>
+          <div class="chatgpt-term-picker">
+            <label>用語<select id="chatgptTermSelect"><option value="">用語を選択</option></select></label>
+            <button id="addChatgptTermButton" class="secondary" type="button">対象に追加</button>
+          </div>
+          <div id="chatgptSelectedTerms" class="chatgpt-selected-terms"></div>
+        </div>
         <div class="knowledge-inline-actions">
+          <button id="prepareChosenNotesButton" class="secondary" type="button">選択対象をまとめる</button>
+          <button id="prepareSubjectNotesButton" class="secondary" type="button">分野をまとめる</button>
           <button id="prepareUnsubmittedNotesButton" class="primary" type="button">未送信をまとめる</button>
-          <button id="prepareSelectedNoteButton" class="secondary" type="button">選択中をまとめる</button>
+          <button id="prepareSelectedNoteButton" class="secondary" type="button">マップ選択中をまとめる</button>
         </div>
         <div id="chatgptBatchHistory" class="stack-list compact"></div>
         <div class="chatgpt-review-section">
@@ -290,7 +302,7 @@
         <h3>無料AI連携</h3><p class="help">API料金を使わず、今日の弱点整理に使う質問文をコピーできます。</p>
         <button id="copyGeneralPromptButton" class="secondary full" type="button">今日の弱点を整理する質問文をコピー</button>
       </section>
-      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.1.4</p><p>オフライン対応・GitHub Pages対応</p></section>
+      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.1.5</p><p>オフライン対応・GitHub Pages対応</p></section>
     </section>
   </main>
 
@@ -314,6 +326,6 @@
   <script src="./assets/subject-a-data.js"></script>
   <script src="./assets/knowledge-map-data.js"></script>
   <script src="./assets/knowledge-map.js"></script>
-  <script src="./assets/app.js?v=2.1.4"></script>
+  <script src="./assets/app.js?v=2.1.5"></script>
 </body>
 </html>

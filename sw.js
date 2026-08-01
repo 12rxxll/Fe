@@ -1,9 +1,9 @@
-const CACHE = 'fe-learning-os-v2-20260801-detail-card-v22';
+const CACHE = 'fe-learning-os-v2-20260801-chatgpt-v23';
 const ASSET_PATHS = [
   './',
   './index.html',
-  './assets/styles.css?v=2.1.4',
-  './assets/app.js?v=2.1.4',
+  './assets/styles.css?v=2.1.5',
+  './assets/app.js?v=2.1.5',
   './assets/terms-data.js',
   './assets/syllabus-terms.js',
   './assets/subject-a-data.js',

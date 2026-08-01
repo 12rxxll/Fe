@@ -75,6 +75,7 @@ const knowledgeExpandedCategories = new Set();
 const knowledgeCategoryLimits = new Map();
 const knowledgeExpandedRelatedTerms = new Set();
 const knowledgeDetailAccordionOpen = new Set();
+const chatgptSelectedTermIds = new Set();
 let knowledgeHighlightTimer = null;
 let highlightedKnowledgeTermId = '';
 const termById = new Map(TERMS.map(t => [String(t.id), t]));
@@ -359,6 +360,10 @@ function setup(){
   $('focusRecommendationButton').addEventListener('click',()=>{const svc=getKnowledgeService(),rec=svc?.recommendNext(1)[0];if(rec){knowledgeMapMode='tree';selectedKnowledgeTermId=rec.term.id;expandKnowledgeCategoryPath(rec.term.categoryId,svc);renderKnowledgeMap();renderKnowledgeDetail(rec.term.id);saveKnowledgeUiState({save:true});}});
   $('prepareUnsubmittedNotesButton').addEventListener('click',()=>prepareNoteSubmission('unsubmitted'));
   $('prepareSelectedNoteButton').addEventListener('click',()=>prepareNoteSubmission('selected'));
+  $('prepareChosenNotesButton').addEventListener('click',()=>prepareNoteSubmission('custom'));
+  $('prepareSubjectNotesButton').addEventListener('click',()=>prepareNoteSubmission('subject'));
+  $('addChatgptTermButton').addEventListener('click',addChatGPTSelectedTerm);
+  $('chatgptSubjectFilter').addEventListener('change',()=>renderNoteSubmissionPanel(getKnowledgeService()));
   $('includeSubmittedNotes').addEventListener('change',()=>renderNoteSubmissionPanel(getKnowledgeService()));
   bindMemorizationControls();
   $('startQuizButton').addEventListener('click',()=>startQuiz());
@@ -571,7 +576,7 @@ function renderKnowledgeDetailAccordion(key,title,bodyHtml,scope){
 }
 function renderKnowledgeInfoAccordion(term,svc,scope){
   const prereq=svc.getPrerequisites(term.id),reasons=svc.weakReasons(term.id),entries=relatedEntriesForTerm(term,svc,18);
-  const body=`<div class="knowledge-accordion-grid"><div class="knowledge-detail-field"><strong>詳しい説明</strong><p>${esc(term.detailedDescription||term.shortDescription||'説明は未登録です。')}</p>${term.example?`<p class="help"><b>具体例:</b> ${esc(term.example)}</p>`:''}</div><div class="knowledge-mini-stats"><span><strong>重要度</strong><b>${esc(term.importance)}/5</b></span><span><strong>難易度</strong><b>${esc(term.difficulty)}/5</b></span></div><div class="knowledge-detail-field"><strong>前提用語</strong><div class="map-relation-list">${prereq.length?prereq.slice(0,10).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">前提はありません。</span>'}</div></div><div class="knowledge-detail-field"><strong>関連用語</strong><div class="related-term-list">${entries.length?entries.map(entry=>relatedEntryHtml(entry,svc)).join(''):'<p class="empty compact">関連用語は登録されていません。</p>'}</div></div><div class="knowledge-detail-field"><strong>苦手理由</strong><p class="help">${reasons.length?esc(reasons.join('、')):'現在は明確な苦手理由はありません。'}</p></div></div>`;
+  const body=`<div class="knowledge-accordion-grid"><div class="knowledge-detail-field"><strong>詳しい説明</strong><p>${esc(term.detailedDescription||term.shortDescription||'説明は未登録です。')}</p>${term.example?`<p class="help"><b>具体例:</b> ${esc(term.example)}</p>`:''}<button class="secondary compact explain-chatgpt-button" data-term-explain-chatgpt="${esc(term.id)}" type="button">ChatGPTに説明を聞く</button></div><div class="knowledge-mini-stats"><span><strong>重要度</strong><b>${esc(term.importance)}/5</b></span><span><strong>難易度</strong><b>${esc(term.difficulty)}/5</b></span></div><div class="knowledge-detail-field"><strong>前提用語</strong><div class="map-relation-list">${prereq.length?prereq.slice(0,10).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">前提はありません。</span>'}</div></div><div class="knowledge-detail-field"><strong>関連用語</strong><div class="related-term-list">${entries.length?entries.map(entry=>relatedEntryHtml(entry,svc)).join(''):'<p class="empty compact">関連用語は登録されていません。</p>'}</div></div><div class="knowledge-detail-field"><strong>苦手理由</strong><p class="help">${reasons.length?esc(reasons.join('、')):'現在は明確な苦手理由はありません。'}</p></div></div>`;
   return renderKnowledgeDetailAccordion('info','説明・関連情報',body,scope);
 }
 function renderKnowledgeReviewAccordion(term,svc,scope){
@@ -699,6 +704,7 @@ function bindKnowledgeMapActions(){
   $$('[data-map-related-toggle]').forEach(button=>button.onclick=()=>toggleRelatedTerms(button.dataset.mapRelatedToggle));
   $$('[data-map-related-jump]').forEach(button=>button.onclick=()=>jumpToRelatedKnowledgeTerm(button.dataset.mapRelatedJump));
   $$('[data-knowledge-detail-accordion]').forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();toggleKnowledgeDetailAccordion(button.dataset.knowledgeDetailAccordion);});
+  $$('[data-term-explain-chatgpt]').forEach(button=>button.onclick=()=>openKnowledgeTermExplainChatGPT(button.dataset.termExplainChatgpt));
   $$('[data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
   $$('[data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
   updateInlineNoteNavButtons();
@@ -715,6 +721,7 @@ function renderKnowledgeDetail(termId){
   $$('#knowledgeDetailPanel [data-map-related-jump]').forEach(button=>button.onclick=()=>jumpToRelatedKnowledgeTerm(button.dataset.mapRelatedJump));
   $$('#knowledgeDetailPanel [data-map-practice-term]').forEach(button=>button.onclick=()=>startKnowledgeTermPractice(button.dataset.mapPracticeTerm,false));
   $$('#knowledgeDetailPanel [data-knowledge-detail-accordion]').forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();toggleKnowledgeDetailAccordion(button.dataset.knowledgeDetailAccordion);});
+  $$('#knowledgeDetailPanel [data-term-explain-chatgpt]').forEach(button=>button.onclick=()=>openKnowledgeTermExplainChatGPT(button.dataset.termExplainChatgpt));
   $$('#knowledgeDetailPanel [data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
   $$('#knowledgeDetailPanel [data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
   updateInlineNoteNavButtons();
@@ -815,9 +822,27 @@ function noteReviewItem(term,svc){
   const hash=simpleHash(content),path=knowledgeTermPathLabel(term,svc),subject=knowledgeTermSubject(term,svc)||path.split(' > ')[0]||'未分類';
   return {term,record,termId:term.id,name:term.name,question:knowledgeWritingQuestion(term,svc),content,hash,chars,path,subject};
 }
+function noteSubmissionStats(svc=getKnowledgeService()){
+  if(!svc)return {neverSubmitted:0,updated:0,submittedSame:0,sendable:0};
+  return svc.terms.map(term=>noteReviewItem(term,svc)).filter(Boolean).reduce((stats,item)=>{
+    const last=String(item.record.lastSubmittedHash||'');
+    stats.sendable++;
+    if(!last)stats.neverSubmitted++;
+    else if(last===item.hash)stats.submittedSame++;
+    else stats.updated++;
+    return stats;
+  },{neverSubmitted:0,updated:0,submittedSame:0,sendable:0});
+}
+function selectedChatGPTSubject(){return $('chatgptSubjectFilter')?.value||'';}
+function termsForChatGPTScope(scope,svc){
+  if(scope==='selected')return selectedKnowledgeTermId?(svc.getTerm(selectedKnowledgeTermId)?[svc.getTerm(selectedKnowledgeTermId)]:[]):[];
+  if(scope==='subject'){const subject=selectedChatGPTSubject();return subject?svc.terms.filter(term=>knowledgeTermSubject(term,svc)===subject):[];}
+  if(scope==='custom')return [...chatgptSelectedTermIds].map(id=>svc.getTerm(id)).filter(Boolean);
+  return svc.terms;
+}
 function collectNoteSubmissionItems(scope='unsubmitted',includeSubmitted=false,svc=getKnowledgeService()){
   if(!svc)return {items:[],excludedCount:0,sendableCount:0,scope};
-  const selected=selectedKnowledgeTermId?svc.getTerm(selectedKnowledgeTermId):null,terms=scope==='selected'?(selected?[selected]:[]):svc.terms;
+  const selected=selectedKnowledgeTermId?svc.getTerm(selectedKnowledgeTermId):null,terms=termsForChatGPTScope(scope,svc);
   const sendable=terms.map(term=>noteReviewItem(term,svc)).filter(Boolean);
   const items=sendable.filter(item=>includeSubmitted||item.hash!==String(item.record.lastSubmittedHash||''));
   return {items,excludedCount:sendable.length-items.length,sendableCount:sendable.length,scope,selectedMissing:scope==='selected'&&!selected};
@@ -873,14 +898,83 @@ ${items.map(item=>`用語: ${item.name}
 「${item.content}」
 ---`).join('\n')}`;
 }
+function buildKnowledgeTermExplainPrompt(term,svc){
+  const prereq=svc.getPrerequisites(term.id).map(item=>item.name).slice(0,10);
+  const related=unique(relatedEntriesForTerm(term,svc,12).map(entry=>entry.name).filter(Boolean)).slice(0,12);
+  const description=normalizeNoteContent(term.detailedDescription||term.shortDescription||'説明は未登録です。');
+  const example=normalizeNoteContent(term.example||'');
+  return `あなたはFE試験対策の講師です。
+「${term.name}」について、以下の順で説明してください。
+
+1. 初心者向けの短い定義
+2. FEで問われやすいポイント
+3. 計算方法または仕組み
+4. 間違えやすい点
+5. 関連用語との違い
+6. 確認問題を1問
+
+現在アプリに登録されている説明:
+「${description}」
+${example?`\n具体例:\n「${example}」`:''}
+
+前提用語:
+${prereq.length?prereq.join('、'):'前提用語は未登録'}
+
+関連用語:
+${related.length?related.join('、'):'関連用語は未登録'}
+
+重要度: ${term.importance}/5
+難易度: ${term.difficulty}/5
+
+注意:
+- 基本情報技術者試験の範囲に絞って説明してください。
+- 過去問の問題文は転載せず、オリジナルの確認問題を作ってください。`;
+}
+function openKnowledgeTermExplainChatGPT(termId){
+  const svc=getKnowledgeService(),term=svc?.getTerm(termId);
+  if(!term){showToast('用語が見つかりません');return;}
+  const prompt=buildKnowledgeTermExplainPrompt(term,svc);
+  copyText(prompt,'ChatGPT用の説明質問をコピーしました');
+  const opened=window.open(CHATGPT_URL,'_blank','noopener');
+  if(!opened)showToast('質問文をコピーしました。ChatGPTに貼り付けてください');
+}
 function batchStatusLabel(status){return {prepared:'準備済み',copied:'ChatGPTへコピー済み',openedInChatGPT:'ChatGPTを開きました',completed:'確認済み',cancelled:'キャンセル'}[status]||status;}
+function renderChatGPTTargetPicker(svc=getKnowledgeService()){
+  if(!svc||!$('chatgptSubjectFilter'))return;
+  const subjectSelect=$('chatgptSubjectFilter'),currentSubject=subjectSelect.value;
+  subjectSelect.innerHTML='<option value="">すべての分野</option>'+svc.subjects.map(subject=>`<option value="${esc(subject.name)}">${esc(subject.name)}</option>`).join('');
+  if([...subjectSelect.options].some(option=>option.value===currentSubject))subjectSelect.value=currentSubject;
+  const subject=subjectSelect.value,termSelect=$('chatgptTermSelect');
+  if(termSelect){
+    const terms=svc.terms.filter(term=>!subject||knowledgeTermSubject(term,svc)===subject).map(term=>noteReviewItem(term,svc)).filter(Boolean).slice(0,500);
+    termSelect.innerHTML='<option value="">用語を選択</option>'+terms.map(item=>`<option value="${esc(item.termId)}">${esc(item.name)} / ${esc(item.subject)}</option>`).join('');
+  }
+  renderChatGPTSelectedTerms(svc);
+}
+function renderChatGPTSelectedTerms(svc=getKnowledgeService()){
+  const box=$('chatgptSelectedTerms');if(!box||!svc)return;
+  const terms=[...chatgptSelectedTermIds].map(id=>svc.getTerm(id)).filter(Boolean);
+  box.innerHTML=terms.length?terms.map(term=>`<span class="selected-term-chip"><span class="selected-term-chip-name">${esc(term.name)}</span><button data-remove-chatgpt-term="${esc(term.id)}" type="button" aria-label="${esc(term.name)}を対象から外す">×</button></span>`).join(''):'<p class="empty compact">選択した用語はありません。</p>';
+  $$('[data-remove-chatgpt-term]').forEach(button=>button.onclick=()=>{chatgptSelectedTermIds.delete(button.dataset.removeChatgptTerm);renderNoteSubmissionPanel(svc);});
+}
+function addChatGPTSelectedTerm(){
+  const id=$('chatgptTermSelect')?.value||'';
+  if(!id){showToast('追加する用語を選択してください');return;}
+  chatgptSelectedTermIds.add(id);
+  renderNoteSubmissionPanel(getKnowledgeService());
+}
 function renderNoteSubmissionPanel(svc=getKnowledgeService()){
   if(!$('noteBatchReadyCount')||!svc)return;
-  const include=$('includeSubmittedNotes')?.checked||false,unsubmitted=collectNoteSubmissionItems('unsubmitted',include,svc),submitted=collectNoteSubmissionItems('unsubmitted',true,svc).sendableCount-unsubmitted.items.length,selected=collectNoteSubmissionItems('selected',include,svc);
+  const include=$('includeSubmittedNotes')?.checked||false,unsubmitted=collectNoteSubmissionItems('unsubmitted',include,svc),deduped=collectNoteSubmissionItems('unsubmitted',false,svc),submitted=collectNoteSubmissionItems('unsubmitted',true,svc).sendableCount-deduped.items.length,selected=collectNoteSubmissionItems('selected',include,svc);
+  const subject=collectNoteSubmissionItems('subject',include,svc),custom=collectNoteSubmissionItems('custom',include,svc),stats=noteSubmissionStats(svc);
   $('noteBatchReadyCount').textContent=`${unsubmitted.items.length}語`;
-  $('noteBatchSummary').textContent=`今回の新規・更新分 ${unsubmitted.items.length}語。前回送信済みの同一内容 ${Math.max(0,submitted)}語は${include?'含めます':'除外しています'}。`;
+  $('chatgptBatchStats').innerHTML=`<span><b>${stats.neverSubmitted}</b><small>未送信</small></span><span><b>${stats.updated}</b><small>更新あり</small></span><span><b>${stats.submittedSame}</b><small>前回送信済み</small></span>`;
+  $('noteBatchSummary').textContent=`未送信・更新分 ${unsubmitted.items.length}語。前回送信済みの同一内容 ${Math.max(0,submitted)}語は${include?'含めます':'除外しています'}。`;
   $('prepareUnsubmittedNotesButton').disabled=unsubmitted.items.length===0;
   $('prepareSelectedNoteButton').disabled=selected.items.length===0;
+  $('prepareSubjectNotesButton').disabled=subject.items.length===0;
+  $('prepareChosenNotesButton').disabled=custom.items.length===0;
+  renderChatGPTTargetPicker(svc);
   const history=(state.chatgptSubmissionBatches||[]).slice(0,5);
   $('chatgptBatchHistory').innerHTML=history.length?history.map(batch=>`<div class="stack-item"><span class="stack-item-main"><strong>${esc(formatDateTime(batch.createdAt))} ${esc(batch.category||'知識マップ')}</strong><small>${esc(batch.firstTerm||'')} 〜 ${esc(batch.lastTerm||'')}・${batch.itemCount}語・状態: ${esc(batchStatusLabel(batch.status))}</small></span></div>`).join(''):'<p class="empty compact">送信履歴はまだありません。</p>';
   renderChatGPTReviewList(svc);
@@ -907,7 +1001,11 @@ function updateNoteSubmissionIndicators(){
 }
 function prepareNoteSubmission(scope){
   const include=$('includeSubmittedNotes')?.checked||false,collected=collectNoteSubmissionItems(scope,include),batches=splitNoteItems(collected.items);
-  if(!batches.length){showToast(scope==='selected'?'選択中の用語に未送信の記述がありません':'未送信の記述がありません');return;}
+  if(!batches.length){
+    const messages={selected:'マップ選択中の用語に送信対象の記述がありません',subject:'選択した分野に送信対象の記述がありません',custom:'選択した用語に送信対象の記述がありません',unsubmitted:'未送信または更新済みの記述がありません'};
+    showToast(messages[scope]||'送信対象の記述がありません');
+    return;
+  }
   pendingNoteSubmission={scope,include,createdAt:new Date().toISOString(),batches,batchIndex:0,excludedCount:collected.excludedCount,sendableCount:collected.sendableCount};
   renderNoteSubmissionDialog();
   const dialog=$('chatgptBatchDialog');if(!dialog.open)dialog.showModal();

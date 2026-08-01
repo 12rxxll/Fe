@@ -1733,6 +1733,13 @@ textarea {
   font-size: 12px;
 }
 
+.explain-chatgpt-button {
+  justify-self: start;
+  min-height: 36px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
 .map-chatgpt-panel {
   display: grid;
   gap: 10px;
@@ -1740,6 +1747,103 @@ textarea {
 
 .chatgpt-review-panel {
   gap: 12px;
+}
+
+.chatgpt-batch-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.chatgpt-batch-stats span {
+  display: grid;
+  gap: 2px;
+  min-height: 54px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--panel-2);
+  padding: 8px 10px;
+}
+
+.chatgpt-batch-stats b {
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.chatgpt-batch-stats small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.chatgpt-target-picker {
+  display: grid;
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--panel-2);
+  padding: 10px;
+}
+
+.chatgpt-target-picker label,
+.chatgpt-term-picker label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.chatgpt-term-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.chatgpt-selected-terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.selected-term-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
+  color: var(--text);
+  padding: 4px 5px 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.selected-term-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-term-chip button {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text);
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
 }
 
 .chatgpt-review-section {
@@ -2774,6 +2878,15 @@ dialog::backdrop {
 
   .knowledge-memory-actions {
     grid-template-columns: 1fr;
+  }
+
+  .chatgpt-batch-stats,
+  .chatgpt-term-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .chatgpt-batch-stats span {
+    min-height: 44px;
   }
 
   .dialog-actions,
