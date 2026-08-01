@@ -7,7 +7,7 @@ const KNOWLEDGE_TERMS = knowledgeMapTermsToGlossary(KMAP_DATA);
 const TERMS = mergeTerms(CORE_TERMS, SYLLABUS_TERMS, KNOWLEDGE_TERMS);
 const SUBJECT_A = Array.isArray(window.FE_SUBJECT_A_QUESTIONS) ? window.FE_SUBJECT_A_QUESTIONS : [];
 const STORAGE_KEY = 'fe-learning-os-v2';
-const DATA_SCHEMA = 14;
+const DATA_SCHEMA = 15;
 const DAY = 86400000;
 const NOTE_MIN_CHARS = 10;
 const NOTE_BATCH_MAX_TERMS = 20;
@@ -52,6 +52,7 @@ let expandedChatgptReviewTermId = '';
 let pendingFeedbackApplyTermId = '';
 let memorizationRotationPauseUntil = 0;
 let knowledgeUiSaveTimer = null;
+let settingsAutoSaveTimer = null;
 const memorizationRuntime = {
   enabled:false,
   sensorWanted:false,
@@ -97,6 +98,22 @@ function addDays(dateStr,days){const d=new Date((dateStr||localDate())+'T12:00:0
 function diffDays(from,to=localDate()){if(!from)return 0;return Math.round((new Date(to+'T12:00:00')-new Date(from+'T12:00:00'))/DAY);}
 function daysSince(date){return date?Math.max(0,diffDays(date)):999;}
 function clamp(n,a,b){return Math.max(a,Math.min(b,n));}
+function parseLocalDateValue(value){
+  const raw=String(value||'').trim();
+  const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if(!match)return null;
+  const y=Number(match[1]),m=Number(match[2]),d=Number(match[3]),date=new Date(y,m-1,d,12,0,0,0);
+  if(date.getFullYear()!==y||date.getMonth()!==m-1||date.getDate()!==d)return null;
+  return date;
+}
+function normalizeExamDateValue(value){const date=parseLocalDateValue(value);return date?localDate(date):'';}
+function examDateInfo(value=state.settings.examDate){
+  const normalized=normalizeExamDateValue(value);
+  if(!normalized)return {value:'',valid:false,set:false,label:'未設定',remaining:'未設定',days:null,past:false,message:''};
+  const days=diffDays(localDate(),normalized);
+  return {value:normalized,valid:true,set:true,label:new Intl.DateTimeFormat('ja-JP',{year:'numeric',month:'long',day:'numeric'}).format(parseLocalDateValue(normalized)),remaining:days<0?`試験日から${Math.abs(days)}日経過`:days===0?'試験日当日':`試験まであと ${days}日`,days,past:days<0,message:days<0?'過去の日付が設定されています。残り日数は計算対象外です。':''};
+}
+function preferredQuizLength(goal=state.settings.dailyGoal){const n=clamp(Number(goal)||10,1,100);if(n<=5)return '5';if(n<=10)return '10';return '20';}
 function unique(a){return [...new Set(a.filter(Boolean))];}
 function knowledgeMapTermsToGlossary(data){
   if(!data||!Array.isArray(data.terms))return [];
@@ -216,6 +233,7 @@ function migrateMemorizationSettings(value={}){
   const raw=value&&typeof value==='object'?value:{},s=Object.assign(defaultMemorizationSettings(),raw);
   s.enabled=Boolean(s.enabled);
   s.sensorEnabled=Boolean(s.sensorEnabled);
+  if(!s.enabled)s.sensorEnabled=false;
   s.showThreshold=clamp(Number(s.showThreshold)||MEMORIZATION_DEFAULTS.showThreshold,12,60);
   s.hideThreshold=clamp(Number(s.hideThreshold)||MEMORIZATION_DEFAULTS.hideThreshold,3,Math.max(4,s.showThreshold-1));
   s.holdMs=clamp(Number(s.holdMs)||MEMORIZATION_DEFAULTS.holdMs,200,2000);
@@ -223,7 +241,34 @@ function migrateMemorizationSettings(value={}){
   s.panelVisible=s.panelVisible!==false;
   return s;
 }
-function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.settings=s.settings&&typeof s.settings==='object'?Object.assign(defaultState().settings,s.settings||{}):defaultState().settings;s.settings.memorization=migrateMemorizationSettings(s.settings.memorization);s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});s.noteRevisionHistory=migrateNoteRevisionHistory(s.noteRevisionHistory);s.memorizationRatings=s.memorizationRatings&&typeof s.memorizationRatings==='object'?s.memorizationRatings:{};Object.keys(s.memorizationRatings).forEach(id=>{s.memorizationRatings[id]=migrateMemorizationRating(s.memorizationRatings[id]);});s.quizDraft=migrateQuizDraft(s.quizDraft);s.uiState=migrateUiState(s.uiState);s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches.map(migrateSubmissionBatch):[];s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
+function migrateState(s,sourceSchema=2){
+  if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;
+  s.schemaVersion=DATA_SCHEMA;
+  const rawSettings=s.settings&&typeof s.settings==='object'?s.settings:{};
+  s.settings=Object.assign(defaultState().settings,rawSettings);
+  s.settings.dailyGoal=clamp(Number(s.settings.dailyGoal)||10,1,100);
+  s.settings.examDate=normalizeExamDateValue(s.settings.examDate||s.examDate||s.targetExamDate||'');
+  s.settings.theme=['system','light','dark'].includes(s.settings.theme)?s.settings.theme:'system';
+  s.settings.memorization=migrateMemorizationSettings(s.settings.memorization);
+  s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};
+  Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});
+  s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};
+  s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};
+  Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});
+  s.noteRevisionHistory=migrateNoteRevisionHistory(s.noteRevisionHistory);
+  s.memorizationRatings=s.memorizationRatings&&typeof s.memorizationRatings==='object'?s.memorizationRatings:{};
+  Object.keys(s.memorizationRatings).forEach(id=>{s.memorizationRatings[id]=migrateMemorizationRating(s.memorizationRatings[id]);});
+  s.quizDraft=migrateQuizDraft(s.quizDraft);
+  s.uiState=migrateUiState(s.uiState);
+  s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches.map(migrateSubmissionBatch):[];
+  s.attempts=Array.isArray(s.attempts)?s.attempts:[];
+  s.sessions=Array.isArray(s.sessions)?s.sessions:[];
+  s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};
+  s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};
+  s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];
+  s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];
+  return s;
+}
 function termStateNeedsMigration(s){return !('nextReview' in s)||!('lastCorrect' in s)||!('lastWrong' in s)||!('reviewPriority' in s)||!('knowledgeCorrect' in s)||!('knowledgeWrong' in s)||!('consecutiveIncorrect' in s)||!('weakReasons' in s);}
 function readTermState(id){id=String(id);if(!state.terms[id])return emptyTermState();if(termStateNeedsMigration(state.terms[id]))state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
 function getTermState(id){id=String(id);if(!state.terms[id]) state.terms[id]=emptyTermState();else if(termStateNeedsMigration(state.terms[id])) state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
@@ -231,7 +276,7 @@ function emptySubjectState(){return {correct:0,wrong:0,last:null,lastCorrect:nul
 function getSubjectState(id){id=String(id);if(!state.subjectA)state.subjectA={questions:{},attempts:[],sessions:[]};if(!state.subjectA.questions[id])state.subjectA.questions[id]=emptySubjectState();return state.subjectA.questions[id];}
 function loadState(){try{const s=JSON.parse(localStorage.getItem(STORAGE_KEY));if(s&&s.version===2)return migrateState(Object.assign(defaultState(),s,{settings:Object.assign(defaultState().settings,s.settings||{})}),s.schemaVersion);}catch(e){}return defaultState();}
 function refreshReviewPriorities(){Object.keys(state.terms||{}).forEach(id=>{const t=termById.get(String(id));if(t)state.terms[id].reviewPriority=reviewPriority(t);});}
-function saveState(render=true){refreshReviewPriorities();localStorage.setItem(STORAGE_KEY,JSON.stringify(state));if(render) renderAll();}
+function saveState(render=true){refreshReviewPriorities();try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){console.warn('Local storage is unavailable; changes remain in memory for this session.',e);}if(render) renderAll();}
 function showToast(msg){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>el.classList.remove('show'),2200);}
 function applyTheme(){let theme=state.settings.theme||'system';if(theme==='system')theme=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=theme;}
 function todayAttempts(){return state.attempts.filter(a=>a.date===localDate());}
@@ -243,7 +288,7 @@ function accuracy(arr=state.attempts){return arr.length?Math.round(arr.filter(a=
 function daysWithActivity(){return unique(state.attempts.map(a=>a.date)).sort();}
 function currentStreak(){const set=new Set(daysWithActivity());let d=new Date(localDate()+'T12:00:00');if(!set.has(localDate(d))){d.setDate(d.getDate()-1);}let n=0;while(set.has(localDate(d))){n++;d.setDate(d.getDate()-1);}return n;}
 function bestStreak(){const days=daysWithActivity();if(!days.length)return 0;let best=1,run=1;for(let i=1;i<days.length;i++){const a=new Date(days[i-1]+'T12:00:00'),b=new Date(days[i]+'T12:00:00');if(Math.round((b-a)/DAY)===1)run++;else run=1;best=Math.max(best,run);}return best;}
-function examStatus(){const value=state.settings.examDate;if(!value)return '試験日未設定';const today=new Date(localDate()+'T12:00:00'),exam=new Date(value+'T12:00:00');if(Number.isNaN(exam.getTime()))return '試験日未設定';const days=Math.ceil((exam-today)/DAY);if(days<0)return `試験日から${Math.abs(days)}日経過`;if(days===0)return '試験日当日';return `試験まで${days}日`;}
+function examStatus(){const info=examDateInfo();return info.set?info.remaining:'試験日未設定';}
 function memorizationRatingTotal(termId){const r=getMemorizationRatingRecord(termId,false);return r.knownCount+r.unsureCount+r.unknownCount;}
 function isUnlearnedTerm(t){const s=readTermState(t.id);return s.mastery===0&&s.correct+s.wrong===0&&memorizationRatingTotal(t.id)===0;}
 function isForgettingTerm(t){const s=readTermState(t.id);if(isUnlearnedTerm(t))return false;const stale=daysSince(s.last)>=Math.max(3,(s.interval||3)*2),lowMastery=s.mastery<=2&&daysSince(s.last)>=1;return (s.wrong>0&&s.streak<3)||lowMastery||stale;}
@@ -264,7 +309,15 @@ function quizWeakSystems(results){const counts={};results.filter(r=>!r.correct).
 function nextActionText(pct,wrongCount){if(wrongCount>0)return '間違えた用語をすぐ復習すると定着しやすいです。';if(pct>=85)return '良い流れです。未学習語を混ぜたおすすめ演習で範囲を広げましょう。';return 'もう一度おすすめ演習で、復習期限と未学習語をバランスよく進めましょう。';}
 function learningStatusCounts(){const counts={unlearned:0,learning:0,mastered:0};TERMS.forEach(t=>{const s=readTermState(t.id);if(isUnlearnedTerm(t))counts.unlearned++;else if(s.mastery>=4&&s.streak>=3)counts.mastered++;else counts.learning++;});return counts;}
 function weakSystemStats(){return groupStats().map(x=>Object.assign({},x,{weakScore:x.wrong*2+(x.accuracy===null?0:100-x.accuracy)+Math.max(0,x.terms-x.studied)/x.terms*12})).sort((a,b)=>b.weakScore-a.weakScore);}
-function studyAdvice(){const due=priorityReviewTerms().length,weak=weakSystemStats()[0],unlearned=unlearnedTerms().length;if(due>0)return `まず復習対象${due}語を処理し、その後におすすめ演習を10問進めましょう。`;if(weak&&weak.wrong>0)return `${weak.system}の誤答が目立ちます。分野を絞って苦手優先の演習を行いましょう。`;if(unlearned>0)return `未学習語が${unlearned}語あります。おすすめ演習で新しい用語を少しずつ混ぜましょう。`;return '習得済みを維持するため、短い復習を継続しましょう。';}
+function studyPaceText(){
+  const info=examDateInfo();
+  if(!info.set)return '';
+  if(info.past)return '試験予定日は過去日です。設定を見直してください。';
+  if(info.days===0)return '今日は試験予定日です。復習と弱点確認に絞りましょう。';
+  const remaining=unlearnedTerms().length,perDay=Math.max(1,Math.ceil(remaining/Math.max(1,info.days)));
+  return `試験まで${info.days}日、未学習語は1日約${perDay}語が目安です。`;
+}
+function studyAdvice(){const due=priorityReviewTerms().length,weak=weakSystemStats()[0],unlearned=unlearnedTerms().length,pace=studyPaceText(),suffix=pace?` ${pace}`:'';if(due>0)return `まず復習対象${due}語を処理し、その後におすすめ演習を${preferredQuizLength()}問進めましょう。${suffix}`;if(weak&&weak.wrong>0)return `${weak.system}の誤答が目立ちます。分野を絞って苦手優先の演習を行いましょう。${suffix}`;if(unlearned>0)return `未学習語が${unlearned}語あります。おすすめ演習で新しい用語を少しずつ混ぜましょう。${suffix}`;return `習得済みを維持するため、短い復習を継続しましょう。${suffix}`;}
 function getKnowledgeService(){if(!knowledgeMapService&&KMAP_DATA&&window.FEKnowledgeMap){knowledgeMapService=window.FEKnowledgeMap.createKnowledgeMapService(KMAP_DATA,{terms:TERMS,readTermState,attemptsFor,reviewDate,daysSince});const validation=knowledgeMapService.validateData();if(!validation.ok)console.warn('Knowledge map validation warnings',validation.errors);}return knowledgeMapService;}
 function formatProgressCount(value){const n=Number(value)||0;return Number.isInteger(n)?String(n):n.toFixed(1).replace(/\.0$/,'');}
 function formatMastery(value){const n=clamp(Number(value)||0,0,5);return Number.isInteger(n)?String(n):n.toFixed(1).replace(/\.0$/,'');}
@@ -365,8 +418,8 @@ function setup(){
   syncNavigationState();syncReviewTabs();
   $$('[data-nav]').forEach(b=>b.addEventListener('click',()=>navTo(b.dataset.nav)));
   ['quizSource','quizMode','quizSystem','quizLength','quizType'].forEach(id=>$(id).addEventListener('change',saveQuizSetupUiState));
-  $('quickStartButton').addEventListener('click',()=>{navTo('quiz');$('quizSource').value='terms';$('quizLength').value='10';startQuiz({source:'terms',mode:'weak'});});
-  $('recommendedQuizButton').addEventListener('click',()=>{navTo('quiz');$('quizSource').value='terms';$('quizMode').value='recommended';$('quizLength').value='10';startQuiz({source:'terms',mode:'recommended',length:10});});
+  $('quickStartButton').addEventListener('click',()=>{const length=preferredQuizLength();navTo('quiz');$('quizSource').value='terms';$('quizLength').value=length;startQuiz({source:'terms',mode:'weak',length:Number(length)});});
+  $('recommendedQuizButton').addEventListener('click',()=>{const length=preferredQuizLength();navTo('quiz');$('quizSource').value='terms';$('quizMode').value='recommended';$('quizLength').value=length;startQuiz({source:'terms',mode:'recommended',length:Number(length)});});
   $('homeReviewButton').addEventListener('click',startDueReview);
   $('knowledgeSearch').addEventListener('input',renderKnowledgeMap);
   $('knowledgeSubjectFilter').addEventListener('change',renderKnowledgeMap);
@@ -396,7 +449,11 @@ function setup(){
   $('reviewSystemFilter').addEventListener('change',renderReview);
   $$('[data-review-filter]').forEach(b=>b.addEventListener('click',()=>{reviewFilter=b.dataset.reviewFilter;syncReviewTabs();renderReview();}));
   $$('[data-chatgpt-review-filter]').forEach(b=>b.addEventListener('click',()=>{chatgptReviewFilter=b.dataset.chatgptReviewFilter||'all';syncChatGPTReviewFilterTabs();renderChatGPTReviewList(getKnowledgeService());}));
-  $('saveSettingsButton').addEventListener('click',saveSettings);
+  $('saveSettingsButton').addEventListener('click',()=>saveSettings());
+  $('clearExamDateButton').addEventListener('click',clearExamDateSetting);
+  ['dailyGoalInput','examDateInput','themeInput','memorizationDefaultInput','memorizationSensorDefaultInput','memorizationShowThresholdInput','memorizationHideThresholdInput','memorizationHoldMsInput','memorizationManualModeInput','memorizationPanelVisibleInput'].forEach(id=>$(id)?.addEventListener('change',()=>saveSettings({silent:true})));
+  $('dailyGoalInput').addEventListener('input',queueSettingsAutoSave);
+  $('examDateInput').addEventListener('input',queueSettingsAutoSave);
   $('exportButton').addEventListener('click',exportData);
   $('importInput').addEventListener('change',importData);
   $('resetButton').addEventListener('click',resetData);
@@ -427,7 +484,9 @@ function renderHome(){
   $('dailyProgressText').textContent=`${done} / ${daily}`;$('dailyProgressBar').style.width=pct+'%';
   const remaining=Math.max(daily-done,0),due=priorityReviewTerms().length,dueToday=dueTerms().length,studied=studiedTerms().length,acc=accuracy();
   $('homePlanTitle').textContent=due>0?'復習から始める':remaining>0?`今日の目標まであと${remaining}問`:'今日の目標を達成しました';
-  $('homePlanText').textContent=due>0?`期限${dueToday}語と忘れかけ語を優先度順に復習しましょう。`:remaining>0?'10問単位で演習し、間違えた用語は自動で復習候補に入ります。':'余力があれば未学習語か苦手語を少し進めましょう。';
+  const quizLength=preferredQuizLength();
+  $('homePlanText').textContent=due>0?`期限${dueToday}語と忘れかけ語を優先度順に復習しましょう。`:remaining>0?`${quizLength}問単位で演習し、間違えた用語は自動で復習候補に入ります。`:'余力があれば未学習語か苦手語を少し進めましょう。';
+  $('quickStartButton').textContent=`${quizLength}問スタート`;
   $('homeReviewButton').textContent=due>0?`復習 ${due}語`:'復習を見る';
   $('examCountdownText').textContent=examStatus();
   $('streakValue').textContent=currentStreak()+'日';$('accuracyValue').textContent=acc===null?'—':acc+'%';
@@ -1320,7 +1379,8 @@ function memorizationSettings(){
 function hydrateMemorizationRuntime(){
   const settings=memorizationSettings();
   memorizationRuntime.enabled=Boolean(settings.enabled);
-  memorizationRuntime.sensorWanted=Boolean(settings.sensorEnabled);
+  if(!memorizationRuntime.enabled)settings.sensorEnabled=false;
+  memorizationRuntime.sensorWanted=memorizationRuntime.enabled&&Boolean(settings.sensorEnabled);
   memorizationRuntime.sensorState=memorizationRuntime.enabled?(memorizationRuntime.sensorWanted?'許可待ち':'ボタン操作のみ'):'センサ未開始';
   memorizationRuntime.sensorMessage=memorizationRuntime.enabled?'暗記モード中です':'暗記モードはOFFです';
   memorizationRuntime.panelCollapsed=true;
@@ -1367,6 +1427,7 @@ async function setMemorizationMode(enabled,{persist=false,userGesture=false}={})
   } else {
     stopMemorizationSensor('センサ未開始','暗記モードはOFFです');
     memorizationRuntime.sensorWanted=false;
+    settings.sensorEnabled=false;
     resetMemorizationSensorValues();
   }
   if(persist)saveState(false);
@@ -1375,6 +1436,17 @@ async function setMemorizationMode(enabled,{persist=false,userGesture=false}={})
 }
 async function setMemorizationSensor(enabled,{persist=false,userGesture=false}={}){
   const settings=memorizationSettings();
+  if(enabled&&!memorizationRuntime.enabled){
+    settings.sensorEnabled=false;
+    memorizationRuntime.sensorWanted=false;
+    stopMemorizationSensor('センサ未開始','暗記モードをONにすると利用できます');
+    resetMemorizationSensorValues();
+    if(persist)saveState(false);
+    renderMemorizationPanel();
+    applyMemorizationCovers();
+    showToast('センサ操作は暗記モードON時だけ使えます');
+    return false;
+  }
   settings.sensorEnabled=Boolean(enabled);
   memorizationRuntime.sensorWanted=settings.sensorEnabled;
   if(settings.sensorEnabled)memorizationRuntime.panelCollapsed=false;
@@ -1399,6 +1471,13 @@ async function setMemorizationSensor(enabled,{persist=false,userGesture=false}={
   }
 }
 async function startMemorizationSensor(){
+  if(!memorizationRuntime.enabled){
+    memorizationRuntime.sensorWanted=false;
+    memorizationSettings().sensorEnabled=false;
+    stopMemorizationSensor('センサ未開始','暗記モードをONにすると利用できます');
+    renderMemorizationPanel();
+    return false;
+  }
   if(!('DeviceOrientationEvent' in window)){
     memorizationRuntime.sensorWanted=false;
     memorizationSettings().sensorEnabled=false;
@@ -1650,15 +1729,24 @@ function renderMemorizationPanel(){
   const mode=$('memorizationModeToggle');if(!mode)return;
   const settings=memorizationSettings(),sensor=$('memorizationSensorToggle'),badge=$('memorizationStatusBadge'),hint=$('memorizationHint'),reveal=$('memorizationRevealButton'),all=$('memorizationAllButton'),recalibrate=$('memorizationRecalibrateButton'),panel=$('memorizationSensorPanel'),panelBody=$('memorizationSensorPanelBody'),panelToggle=$('memorizationPanelToggle');
   mode.checked=memorizationRuntime.enabled;
-  if(sensor)sensor.checked=Boolean(settings.sensorEnabled);
+  const sensorAvailable=memorizationRuntime.enabled;
+  if(sensor){
+    sensor.checked=sensorAvailable&&Boolean(settings.sensorEnabled);
+    sensor.disabled=!sensorAvailable;
+    sensor.setAttribute('aria-disabled',sensorAvailable?'false':'true');
+    sensor.closest('label')?.classList.toggle('is-disabled',!sensorAvailable);
+  }
   if(badge){badge.textContent=memorizationRuntime.enabled?'ON':'OFF';badge.classList.toggle('active',memorizationRuntime.enabled);}
-  if(hint)hint.textContent=memorizationRuntime.enabled?`${memorizationDecisionText()}。${settings.manualMode==='hold'?'「現在の答えを見る」は長押し中だけ表示します。':'「現在の答えを見る」はタップで表示を切り替えます。'} ${memorizationRuntime.sensorMessage}`:'暗記モードをONにすると、自分の記述だけを隠します。センサなしでもボタンで表示できます。';
+  const sensorHelp=$('memorizationSensorHelp');
+  if(sensorHelp)sensorHelp.classList.toggle('hidden',sensorAvailable);
+  if(hint)hint.textContent=memorizationRuntime.enabled?`${memorizationDecisionText()}。${settings.manualMode==='hold'?'「現在の答えを見る」は長押し中だけ表示します。':'「現在の答えを見る」はタップで表示を切り替えます。'} ${memorizationRuntime.sensorMessage}`:'暗記モードをONにすると、自分の記述だけを隠します。センサ操作はOFFになります。';
   const target=currentMemorizationTargetTermId();
   if(reveal){reveal.disabled=!memorizationRuntime.enabled||!target;reveal.textContent=settings.manualMode==='tap'&&memorizationRuntime.manualToggleTermId?'答えを隠す':(settings.manualMode==='hold'?'長押しで答えを見る':'現在の答えを見る');}
   if(all){all.disabled=!memorizationRuntime.enabled;all.textContent=memorizationRuntime.allVisible?'すべて隠す':'すべて表示';}
   if(recalibrate)recalibrate.disabled=!memorizationRuntime.enabled||!settings.sensorEnabled;
   if(panel){
-    panel.classList.toggle('hidden',!settings.panelVisible);
+    panel.classList.toggle('hidden',!settings.panelVisible||!memorizationRuntime.enabled);
+    panel.classList.toggle('is-disabled',!settings.sensorEnabled);
     panel.classList.toggle('collapsed',memorizationRuntime.panelCollapsed);
   }
   if(panelBody)panelBody.classList.toggle('hidden',memorizationRuntime.panelCollapsed);
@@ -1912,7 +2000,7 @@ function finishQuiz(){
     }
     persistQuizDraft();$('quizSetup').classList.add('hidden');$('quizArea').classList.remove('hidden');renderQuizQuestion();
   };
-  $('nextRecommendedButton').onclick=()=>{d.close();quiz=null;if(source==='subjectA'){startQuiz({source:'subjectA',mode:'recommended',length:10,force:true});return;}$('quizSource').value='terms';$('quizMode').value='recommended';startQuiz({source:'terms',mode:'recommended',length:10,force:true});};
+  $('nextRecommendedButton').onclick=()=>{const length=Number(preferredQuizLength());d.close();quiz=null;if(source==='subjectA'){startQuiz({source:'subjectA',mode:'recommended',length,force:true});return;}$('quizSource').value='terms';$('quizMode').value='recommended';startQuiz({source:'terms',mode:'recommended',length,force:true});};
   quiz=null;
   renderAll();
 }
@@ -1948,7 +2036,64 @@ function resumeReviewFromReviewScreen(){
 function renderReview(){const list=reviewTerms(),stats=reviewProblemStats(),reviewStats=chatGPTReviewStats(getKnowledgeService()),top=stats.due[0];$('reviewCountLabel').textContent=`${list.length}語`;$('reviewHeroCount').textContent=`${stats.due.length}語`;$('problemReviewReadyCount').textContent=stats.due.length;$('problemReviewWrongCount').textContent=stats.wrong.length;$('problemReviewDueCount').textContent=stats.due.length;$('problemReviewWrongOnlyCount').textContent=stats.wrong.length;$('problemReviewWeakCount').textContent=stats.weak.length;$('problemReviewDeadlineCount').textContent=stats.deadline.length;$('problemReviewLastScore').textContent=stats.lastScore;$('nextReviewDate').textContent=formatReviewDate(nextReviewDate());$('startReviewButton').disabled=stats.due.length===0;$('startDueReviewButton').disabled=stats.due.length===0;$('startWrongReviewButton').disabled=stats.wrong.length===0;$('startWeakReviewButton').disabled=stats.weak.length===0;$('resumeReviewButton').disabled=!migrateQuizDraft(state.quizDraft);$('writingReviewPendingCount').textContent=reviewStats.pending+reviewStats.needsRecheck;$('writingReviewFixCount').textContent=reviewStats.needsFix;$('reviewList').innerHTML=list.length?list.slice(0,100).map(reviewCard).join(''):'<div class="panel empty">現在の対象はありません。</div>';renderNoteSubmissionPanel(getKnowledgeService());bindTermLinks();}
 function statusSegment(label,count,total,kind){const raw=total?count/total*100:0,pct=Math.round(raw),width=count?Math.max(2,pct):0,display=count&&pct===0?'&lt;1%':pct+'%';return `<div class="status-segment ${esc(kind)}"><div><strong>${esc(label)}</strong><span>${count}語 / ${display}</span></div><div class="progress-track"><span style="width:${width}%"></span></div></div>`;}
 function renderProgress(){const total=state.attempts.length,c=state.attempts.filter(a=>a.correct).length,ready=readiness();$('totalAnswersValue').textContent=total;$('totalCorrectValue').textContent=c;$('studyDaysValue').textContent=daysWithActivity().length;$('bestStreakValue').textContent=bestStreak()+'日';$('progressReadinessValue').textContent=ready+'%';$('progressReadinessBar').style.width=ready+'%';$('studyAdviceText').textContent=`参考値です。${studyAdvice()}`;const status=learningStatusCounts(),termTotal=TERMS.length;$('learningStatusSummary').innerHTML=[statusSegment('未学習',status.unlearned,termTotal,'unlearned'),statusSegment('学習中',status.learning,termTotal,'learning'),statusSegment('習得済み',status.mastered,termTotal,'mastered')].join('');renderWritingTestSummary();const days=renderActivityChart($('progressActivityChart')),sum=days.reduce((a,b)=>a+b.count,0),active=days.filter(x=>x.count>0).length;$('progressActivitySummary').textContent=`14日間で${sum}問、学習日は${active}日です。`;const weakSystems=weakSystemStats().filter(x=>x.attempts>0||x.studied>0).slice(0,3);$('weakAreaSummary').innerHTML=weakSystems.length?weakSystems.map(x=>`<div class="stack-item"><span class="stack-item-main"><strong>${esc(x.system)}</strong><small>正答率 ${x.accuracy===null?'—':x.accuracy+'%'}・誤答 ${x.wrong}・学習済み ${x.studied}/${x.terms}語</small></span><b>${Math.round(x.weakScore)}</b></div>`).join(''):'<p class="empty">まだ苦手分野を判定できる履歴がありません。</p>';$('categoryAnalytics').innerHTML=groupStats().map(x=>`<div class="analytics-row"><strong>${esc(x.system)}</strong><div class="progress-track"><span style="width:${x.accuracy??0}%"></span></div><span>${x.accuracy===null?'—':x.accuracy+'%'}</span><small>${x.correct}/${x.attempts}問正解・${x.studied}/${x.terms}語学習</small></div>`).join('');const rank=TERMS.filter(t=>readTermState(t.id).wrong>0).sort((a,b)=>readTermState(b.id).wrong-readTermState(a.id).wrong||reviewPriority(b)-reviewPriority(a)).slice(0,10);$('mistakeRanking').innerHTML=rank.length?rank.map(stackTerm).join(''):'<p class="empty">誤答履歴はありません。</p>';bindTermLinks();}
-function renderSettings(){
+function setExamDateSaveState(text='保存済み'){const el=$('examDateSaveState');if(el)el.textContent=text;}
+function queueSettingsAutoSave(){
+  setExamDateSaveState('保存中');
+  clearTimeout(settingsAutoSaveTimer);
+  settingsAutoSaveTimer=setTimeout(()=>saveSettings({silent:true}),320);
+}
+function renderExamDateSetting(status='保存済み'){
+  const info=examDateInfo();
+  if($('examDateCurrent'))$('examDateCurrent').textContent=info.label;
+  if($('examDateRemaining'))$('examDateRemaining').textContent=info.remaining;
+  const warning=$('examDateWarning');
+  if(warning){warning.textContent=info.message;warning.classList.toggle('hidden',!info.message);}
+  $('clearExamDateButton')?.toggleAttribute('disabled',!info.set);
+  setExamDateSaveState(status);
+}
+function syncSettingsControls(status='保存済み'){
+  const memorization=memorizationSettings();
+  const sensorDefault=$('memorizationSensorDefaultInput'),memorizationDefault=$('memorizationDefaultInput');
+  if(sensorDefault){
+    sensorDefault.disabled=!memorization.enabled;
+    sensorDefault.checked=memorization.enabled&&Boolean(memorization.sensorEnabled);
+    sensorDefault.setAttribute('aria-disabled',memorization.enabled?'false':'true');
+    sensorDefault.closest('label')?.classList.toggle('is-disabled',!memorization.enabled);
+  }
+  if(memorizationDefault)memorizationDefault.checked=Boolean(memorization.enabled);
+  renderExamDateSetting(status);
+}
+function syncQuizLengthWithDailyGoal(){
+  const length=preferredQuizLength(state.settings.dailyGoal);
+  const ui=uiState();
+  ui.quizSetup.length=length;
+  if($('quizLength'))$('quizLength').value=length;
+}
+function applySettingsEffects(){
+  applyTheme();
+  const memorization=memorizationSettings();
+  memorizationRuntime.enabled=Boolean(memorization.enabled);
+  memorizationRuntime.sensorWanted=memorizationRuntime.enabled&&Boolean(memorization.sensorEnabled);
+  if(!memorizationRuntime.enabled){
+    clearMemorizationReveal();
+    stopMemorizationSensor('センサ未開始','暗記モードはOFFです');
+    resetMemorizationSensorValues();
+  } else if(!memorizationRuntime.sensorWanted){
+    stopMemorizationSensor('ボタン操作のみ','端末を傾けずボタンだけで使えます');
+  } else {
+    memorizationRuntime.sensorState=memorizationRuntime.sensorListening?'センサON':'許可待ち';
+    memorizationRuntime.sensorMessage=memorizationRuntime.sensorListening?'端末を傾けると現在用語だけ表示します':'マップでセンサ操作ONを押すと許可を確認します';
+    memorizationRuntime.panelCollapsed=false;
+  }
+  renderMemorizationPanel();
+  applyMemorizationCovers();
+  if(currentView==='home')renderHome();
+  if(currentView==='progress')renderProgress();
+  if(currentView==='quiz')renderQuizView();
+  if(currentView==='review')renderReview();
+  if(currentView==='map')renderKnowledgeMap();
+}
+function renderSettings(status='保存済み'){
   const memorization=memorizationSettings();
   $('dailyGoalInput').value=state.settings.dailyGoal||10;
   $('examDateInput').value=state.settings.examDate||'';
@@ -1960,35 +2105,40 @@ function renderSettings(){
   $('memorizationHoldMsInput').value=memorization.holdMs;
   $('memorizationManualModeInput').value=memorization.manualMode;
   $('memorizationPanelVisibleInput').checked=Boolean(memorization.panelVisible);
+  syncSettingsControls(status);
 }
-function saveSettings(){
+function saveSettings(options={}){
+  const silent=Boolean(options&&options.silent);
+  clearTimeout(settingsAutoSaveTimer);
   state.settings.dailyGoal=clamp(Number($('dailyGoalInput').value)||10,1,100);
-  state.settings.examDate=$('examDateInput').value;
-  state.settings.theme=$('themeInput').value;
+  state.settings.examDate=normalizeExamDateValue($('examDateInput').value);
+  state.settings.theme=['system','light','dark'].includes($('themeInput').value)?$('themeInput').value:'system';
   const showThreshold=clamp(Number($('memorizationShowThresholdInput').value)||MEMORIZATION_DEFAULTS.showThreshold,12,60);
+  const memorizationEnabled=$('memorizationDefaultInput').checked;
   state.settings.memorization=migrateMemorizationSettings({
-    enabled:$('memorizationDefaultInput').checked,
-    sensorEnabled:$('memorizationSensorDefaultInput').checked,
+    enabled:memorizationEnabled,
+    sensorEnabled:memorizationEnabled&&$('memorizationSensorDefaultInput').checked,
     showThreshold,
     hideThreshold:clamp(Number($('memorizationHideThresholdInput').value)||MEMORIZATION_DEFAULTS.hideThreshold,3,Math.max(4,showThreshold-1)),
     holdMs:clamp(Number($('memorizationHoldMsInput').value)||MEMORIZATION_DEFAULTS.holdMs,200,2000),
     manualMode:$('memorizationManualModeInput').value,
     panelVisible:$('memorizationPanelVisibleInput').checked
   });
-  memorizationRuntime.enabled=Boolean(state.settings.memorization.enabled);
-  memorizationRuntime.sensorWanted=Boolean(state.settings.memorization.sensorEnabled);
-  if(!memorizationRuntime.enabled)stopMemorizationSensor('センサ未開始','暗記モードはOFFです');
-  else {
-    memorizationRuntime.sensorState=memorizationRuntime.sensorWanted?'許可待ち':'ボタン操作のみ';
-    memorizationRuntime.sensorMessage=memorizationRuntime.sensorWanted?'マップでセンサ操作ONを押すと許可を確認します':'端末を傾けずボタンだけで使えます';
-    if(memorizationRuntime.sensorWanted)memorizationRuntime.panelCollapsed=false;
-  }
-  saveState();
-  showToast('設定を保存しました');
+  syncQuizLengthWithDailyGoal();
+  saveQuizSetupUiState();
+  saveState(false);
+  applySettingsEffects();
+  if(currentView==='settings')renderSettings('保存しました');
+  if(!silent)showToast('設定を保存しました');
+}
+function clearExamDateSetting(){
+  $('examDateInput').value='';
+  saveSettings({silent:true});
+  showToast('試験予定日を削除しました');
 }
 function exportData(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`FE_Learning_OS_backup_${localDate()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);}
-function importData(e){const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const x=JSON.parse(reader.result);if(!x||x.version!==2)throw new Error();state=migrateState(Object.assign(defaultState(),x,{settings:Object.assign(defaultState().settings,x.settings||{})}),x.schemaVersion);saveState();showToast('バックアップを読み込みました');}catch(err){alert('このバックアップファイルは読み込めません。');}};reader.readAsText(file);e.target.value='';}
-function resetData(){if(confirm('学習履歴・メモ・設定をすべて削除しますか？')){localStorage.removeItem(STORAGE_KEY);state=defaultState();saveState();showToast('学習データを削除しました');}}
+function importData(e){const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const x=JSON.parse(reader.result);if(!x||x.version!==2)throw new Error();state=migrateState(Object.assign(defaultState(),x,{settings:Object.assign(defaultState().settings,x.settings||{})}),x.schemaVersion);hydrateMemorizationRuntime();saveState(false);applySettingsEffects();renderAll();showToast('バックアップを読み込みました');}catch(err){alert('このバックアップファイルは読み込めません。');}};reader.readAsText(file);e.target.value='';}
+function resetData(){if(confirm('学習履歴・メモ・設定をすべて削除しますか？')){try{localStorage.removeItem(STORAGE_KEY);}catch(e){console.warn('Local storage is unavailable; reset only affects this session.',e);}state=defaultState();hydrateMemorizationRuntime();saveState(false);renderAll();showToast('学習データを削除しました');}}
 function copyText(text,msg='コピーしました'){if(navigator.clipboard&&location.protocol!=='file:')navigator.clipboard.writeText(text).then(()=>showToast(msg)).catch(()=>fallbackCopy(text,msg));else fallbackCopy(text,msg);}
 function fallbackCopy(text,msg){const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();showToast(msg);}
 function compactWeakSummary(limit=5){const today=localDate(),todayWrong=state.attempts.filter(a=>a.date===today&&!a.correct).map(a=>termById.get(String(a.id))).filter(Boolean),weak=TERMS.filter(t=>readTermState(t.id).wrong>0).sort((a,b)=>readTermState(b.id).wrong-readTermState(a.id).wrong);const merged=[],seen=new Set();[todayWrong,weak].forEach(group=>group.forEach(t=>{if(merged.length<limit&&!seen.has(String(t.id))){seen.add(String(t.id));merged.push(t);}}));return merged.length?merged.map(t=>`${t['用語']}（${t['系']}、誤答${readTermState(t.id).wrong}回）`).join('、'):'まだ誤答データなし';}

@@ -9,7 +9,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./assets/styles.css?v=2.1.6">
+  <link rel="stylesheet" href="./assets/styles.css?v=2.1.7">
   <title>FE Learning OS</title>
 </head>
 <body>
@@ -241,6 +241,7 @@
           <label class="checkbox-row"><input id="memorizationModeToggle" type="checkbox">暗記モード</label>
           <label class="checkbox-row"><input id="memorizationSensorToggle" type="checkbox">センサ操作</label>
         </div>
+        <p id="memorizationSensorHelp" class="sensor-dependency-help">暗記モードをONにすると利用できます</p>
         <div class="memorization-actions">
           <button id="memorizationRevealButton" class="primary" type="button">現在の答えを見る</button>
           <button id="memorizationAllButton" class="secondary" type="button">すべて表示</button>
@@ -316,10 +317,25 @@
 
     <section id="view-settings" class="view" aria-labelledby="settingsTitle">
       <div class="section-heading"><div><p class="eyebrow">Settings</p><h2 id="settingsTitle">設定</h2></div></div>
-      <section class="panel form-stack">
-        <label>1日の目標問題数<input id="dailyGoalInput" type="number" min="1" max="100" step="1"></label>
-        <label>試験予定日<input id="examDateInput" type="date"></label>
-        <label>表示テーマ<select id="themeInput"><option value="system">端末設定</option><option value="light">ライト</option><option value="dark">ダーク</option></select></label>
+      <section class="panel form-stack settings-panel">
+        <label class="setting-field" for="dailyGoalInput"><span>1日の目標問題数</span><input id="dailyGoalInput" type="number" min="1" max="100" step="1" inputmode="numeric"></label>
+        <section class="exam-date-card" aria-labelledby="examDateSettingTitle">
+          <div class="setting-copy">
+            <h3 id="examDateSettingTitle">試験予定日</h3>
+            <p class="help">学習計画や残り日数の計算に使用します</p>
+          </div>
+          <label class="setting-field" for="examDateInput"><span>日付</span><input id="examDateInput" type="date"></label>
+          <div class="exam-date-meta" aria-live="polite">
+            <span><small>現在値</small><strong id="examDateCurrent">未設定</strong></span>
+            <span><small>残り日数</small><strong id="examDateRemaining">未設定</strong></span>
+          </div>
+          <p id="examDateWarning" class="settings-warning hidden" role="alert"></p>
+          <div class="settings-inline-actions">
+            <button id="clearExamDateButton" class="secondary" type="button">日付を削除</button>
+            <span id="examDateSaveState" class="settings-save-state" aria-live="polite">保存済み</span>
+          </div>
+        </section>
+        <label class="setting-field" for="themeInput"><span>表示テーマ</span><select id="themeInput"><option value="system">端末設定</option><option value="light">ライト</option><option value="dark">ダーク</option></select></label>
         <button id="saveSettingsButton" class="primary" type="button">設定を保存</button>
       </section>
       <section class="panel form-stack">
@@ -340,7 +356,7 @@
         <h3>無料AI連携</h3><p class="help">API料金を使わず、今日の弱点整理に使う質問文をコピーできます。</p>
         <button id="copyGeneralPromptButton" class="secondary full" type="button">今日の弱点を整理する質問文をコピー</button>
       </section>
-      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.1.6</p><p>オフライン対応・GitHub Pages対応</p></section>
+      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.1.7</p><p>オフライン対応・GitHub Pages対応</p></section>
     </section>
   </main>
 
@@ -365,6 +381,6 @@
   <script src="./assets/subject-a-data.js"></script>
   <script src="./assets/knowledge-map-data.js"></script>
   <script src="./assets/knowledge-map.js"></script>
-  <script src="./assets/app.js?v=2.1.6"></script>
+  <script src="./assets/app.js?v=2.1.7"></script>
 </body>
 </html>
