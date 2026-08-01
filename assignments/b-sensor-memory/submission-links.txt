@@ -1,0 +1,14 @@
+FE Learning OS B課題 提出用リンク
+
+公開アプリ:
+https://12rxxll.github.io/Fe/
+
+GitHub:
+https://github.com/12rxxll/Fe
+
+使用する機能:
+マップ画面 > 暗記モード
+
+備考:
+今回の課題は、既存のFE Learning OSに実装済みの端末方向センサ暗記モードを題材にしています。
+別アプリ用のindex.htmlは提出対象にしません。
