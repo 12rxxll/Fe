@@ -7,7 +7,7 @@ const KNOWLEDGE_TERMS = knowledgeMapTermsToGlossary(KMAP_DATA);
 const TERMS = mergeTerms(CORE_TERMS, SYLLABUS_TERMS, KNOWLEDGE_TERMS);
 const SUBJECT_A = Array.isArray(window.FE_SUBJECT_A_QUESTIONS) ? window.FE_SUBJECT_A_QUESTIONS : [];
 const STORAGE_KEY = 'fe-learning-os-v2';
-const DATA_SCHEMA = 9;
+const DATA_SCHEMA = 10;
 const DAY = 86400000;
 const NOTE_MIN_CHARS = 10;
 const NOTE_BATCH_MAX_TERMS = 20;
@@ -23,7 +23,7 @@ const MEMORIZATION_DEFAULTS = {
   panelVisible:true
 };
 const defaultMemorizationSettings = () => Object.assign({}, MEMORIZATION_DEFAULTS);
-const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system',memorization:defaultMemorizationSettings()},terms:{},knowledgeNotes:{},termNotes:{},memorizationRatings:{},chatgptSubmissionBatches:[],attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
+const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system',memorization:defaultMemorizationSettings()},terms:{},knowledgeNotes:{},termNotes:{},memorizationRatings:{},quizDraft:null,chatgptSubmissionBatches:[],attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
 let needsMigrationSave = false;
 let state = loadState();
 let currentView = 'home';
@@ -126,6 +126,43 @@ function migrateMemorizationRating(value={}){
   s.unknownCount=Math.max(0,Number(s.unknownCount)||0);
   return s;
 }
+function migrateQuizItem(value={}){
+  const s=value&&typeof value==='object'?value:null;
+  if(!s||!s.target||!Array.isArray(s.options)||!s.options.length)return null;
+  s.options=s.options.map(option=>({id:String(option.id),label:String(option.label||'')})).filter(option=>option.label);
+  s.qtype=String(s.qtype||'mixed');
+  s.prompt=String(s.prompt||'');
+  s.userAnswer=s.userAnswer===undefined||s.userAnswer===null?null:String(s.userAnswer);
+  s.correct=s.correct===undefined||s.correct===null?null:Boolean(s.correct);
+  s.graded=Boolean(s.graded);
+  s.answeredAt=s.answeredAt||null;
+  s.linkedTermNames=Array.isArray(s.linkedTermNames)?s.linkedTermNames.map(String):[];
+  return s.options.length?s:null;
+}
+function migrateQuizDraft(value={}){
+  const s=value&&typeof value==='object'?value:null;
+  if(!s||s.completed||!Array.isArray(s.items)||!s.items.length)return null;
+  const items=s.items.map(migrateQuizItem).filter(Boolean);
+  if(!items.length)return null;
+  const source=s.source==='subjectA'?'subjectA':'terms',length=items.length,index=clamp(Number(s.index)||0,0,length-1);
+  return {
+    sessionId:String(s.sessionId||`quiz-${Date.now().toString(36)}`),
+    startedAt:Number(s.startedAt)||Date.now(),
+    updatedAt:Number(s.updatedAt)||Date.now(),
+    source,
+    mode:String(s.mode||'recommended'),
+    system:String(s.system||''),
+    type:String(s.type||'mixed'),
+    length,
+    index,
+    correct:Math.max(0,Number(s.correct)||items.filter(item=>item.graded&&item.correct).length),
+    answered:Boolean(s.answered&&items[index]?.graded),
+    questionIds:Array.isArray(s.questionIds)?s.questionIds.map(String):items.map(quizItemTargetId),
+    items,
+    results:Array.isArray(s.results)?s.results.map(r=>({id:String(r.id),correct:Boolean(r.correct),source:r.source==='subjectA'?'subjectA':'terms',system:String(r.system||'')})):items.filter(item=>item.graded).map(item=>({id:quizItemTargetId(item),correct:Boolean(item.correct),source,system:quizItemSystem(item)})),
+    completed:false
+  };
+}
 function migrateMemorizationSettings(value={}){
   const raw=value&&typeof value==='object'?value:{},s=Object.assign(defaultMemorizationSettings(),raw);
   s.enabled=Boolean(s.enabled);
@@ -137,7 +174,7 @@ function migrateMemorizationSettings(value={}){
   s.panelVisible=s.panelVisible!==false;
   return s;
 }
-function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.settings=s.settings&&typeof s.settings==='object'?Object.assign(defaultState().settings,s.settings||{}):defaultState().settings;s.settings.memorization=migrateMemorizationSettings(s.settings.memorization);s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});s.memorizationRatings=s.memorizationRatings&&typeof s.memorizationRatings==='object'?s.memorizationRatings:{};Object.keys(s.memorizationRatings).forEach(id=>{s.memorizationRatings[id]=migrateMemorizationRating(s.memorizationRatings[id]);});s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches.map(migrateSubmissionBatch):[];s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
+function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.settings=s.settings&&typeof s.settings==='object'?Object.assign(defaultState().settings,s.settings||{}):defaultState().settings;s.settings.memorization=migrateMemorizationSettings(s.settings.memorization);s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});s.memorizationRatings=s.memorizationRatings&&typeof s.memorizationRatings==='object'?s.memorizationRatings:{};Object.keys(s.memorizationRatings).forEach(id=>{s.memorizationRatings[id]=migrateMemorizationRating(s.memorizationRatings[id]);});s.quizDraft=migrateQuizDraft(s.quizDraft);s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches.map(migrateSubmissionBatch):[];s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
 function termStateNeedsMigration(s){return !('nextReview' in s)||!('lastCorrect' in s)||!('lastWrong' in s)||!('reviewPriority' in s)||!('knowledgeCorrect' in s)||!('knowledgeWrong' in s)||!('consecutiveIncorrect' in s)||!('weakReasons' in s);}
 function readTermState(id){id=String(id);if(!state.terms[id])return emptyTermState();if(termStateNeedsMigration(state.terms[id]))state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
 function getTermState(id){id=String(id);if(!state.terms[id]) state.terms[id]=emptyTermState();else if(termStateNeedsMigration(state.terms[id])) state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
@@ -246,6 +283,7 @@ function setup(){
   $('includeSubmittedNotes').addEventListener('change',()=>renderNoteSubmissionPanel(getKnowledgeService()));
   bindMemorizationControls();
   $('startQuizButton').addEventListener('click',()=>startQuiz());
+  $('quizDraftPanel').addEventListener('click',handleQuizDraftPanelClick);
   $('startReviewButton').addEventListener('click',startDueReview);
   $$('[data-review-filter]').forEach(b=>b.addEventListener('click',()=>{reviewFilter=b.dataset.reviewFilter;syncReviewTabs();renderReview();}));
   $('saveSettingsButton').addEventListener('click',saveSettings);
@@ -271,7 +309,7 @@ function setup(){
   if(['home','study','terms','quiz','review','progress','map','settings'].includes(initialView))navTo(initialView);else renderAll();
 }
 
-function renderAll(){applyTheme();renderHome();if(currentView==='review')renderReview();if(currentView==='progress')renderProgress();if(currentView==='map')renderKnowledgeMap();if(currentView==='settings')renderSettings();}
+function renderAll(){applyTheme();renderHome();if(currentView==='quiz')renderQuizView();if(currentView==='review')renderReview();if(currentView==='progress')renderProgress();if(currentView==='map')renderKnowledgeMap();if(currentView==='settings')renderSettings();}
 function renderHome(){
   const daily=state.settings.dailyGoal||10, done=todayAttempts().length,pct=clamp(done/daily*100,0,100);
   $('dailyProgressText').textContent=`${done} / ${daily}`;$('dailyProgressBar').style.width=pct+'%';
@@ -1165,26 +1203,182 @@ function openKnowledgeTermChatGPT(termId){
   if(!opened)showToast('質問文をコピーしました。ChatGPTに貼り付けてください');
 }
 function startKnowledgeTermStudy(termId){const term=getKnowledgeService()?.getTerm(termId);if(!term||!term.appTermId){showToast('既存の用語データに接続されていません');return;}openTerm(term.appTermId);}
+function quizSessionId(){return `quiz-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;}
+function quizItemTargetId(item){return String(item?.target?.id??'');}
+function quizItemSystem(item){return String(item?.source==='subjectA'?item.target?.system:item?.target?.['系']||'');}
+function quizSourceLabel(value){return value==='subjectA'?'科目A':'用語4択';}
+function quizModeLabel(value){return ({recommended:'おすすめ',random:'ランダム',weak:'苦手優先',due:'復習期限',unlearned:'未学習優先',knowledge:'知識マップ',retry:'復習',mock:'模試形式'})[value]||value||'おすすめ';}
+function quizTypeLabel(value){return ({mixed:'ミックス',description:'説明 → 用語',term:'用語 → 説明',mock:'模試形式',subjectA:'科目A'})[value]||value||'ミックス';}
+function quizSystemLabel(value){return value||'全分野';}
+function quizAnsweredCount(target=quiz){return target?.items?.filter(item=>item.graded).length||0;}
+function normalizeQuizIndex(target=quiz){
+  if(!target?.items?.length)return 0;
+  const firstOpen=target.items.findIndex(item=>!item.graded);
+  return firstOpen>=0?firstOpen:target.items.length;
+}
+function recalcQuizScore(target=quiz){
+  if(!target)return 0;
+  target.correct=target.items.filter(item=>item.graded&&item.correct).length;
+  target.results=target.items.filter(item=>item.graded).map(item=>({id:quizItemTargetId(item),correct:Boolean(item.correct),source:target.source,system:quizItemSystem(item)}));
+  return target.correct;
+}
+function serializableQuizDraft(target=quiz){
+  if(!target?.items?.length||target.completed)return null;
+  recalcQuizScore(target);
+  return {
+    sessionId:target.sessionId||quizSessionId(),
+    startedAt:Number(target.startedAt)||Date.now(),
+    updatedAt:Date.now(),
+    source:target.source==='subjectA'?'subjectA':'terms',
+    mode:String(target.mode||'recommended'),
+    system:String(target.system||''),
+    type:String(target.type||'mixed'),
+    length:target.items.length,
+    index:clamp(Number(target.index)||0,0,Math.max(0,target.items.length-1)),
+    correct:target.correct,
+    answered:Boolean(target.answered),
+    questionIds:target.items.map(quizItemTargetId),
+    items:target.items,
+    results:target.results,
+    completed:false
+  };
+}
+function persistQuizDraft(){
+  const draft=serializableQuizDraft();
+  if(!draft)return;
+  state.quizDraft=draft;
+  saveState(false);
+}
+function clearQuizDraft(save=true){
+  state.quizDraft=null;
+  if(save)saveState(false);
+}
+function showQuizSetup(){
+  quiz=null;
+  $('quizSetup').classList.remove('hidden');
+  $('quizArea').classList.add('hidden');
+  $('quizSessionStatus').textContent='';
+  renderQuizDraftPanel();
+}
+function pauseQuizToSetup({message='途中の演習を保存しました'}={}){
+  if(!quiz)return showQuizSetup();
+  if(quiz.items?.[quiz.index]?.graded&&quiz.index<quiz.items.length-1)quiz.index=normalizeQuizIndex(quiz);
+  quiz.answered=Boolean(quiz.items?.[quiz.index]?.graded);
+  persistQuizDraft();
+  showQuizSetup();
+  showToast(message);
+}
+function resumeQuizDraft(){
+  const draft=migrateQuizDraft(state.quizDraft);
+  if(!draft){clearQuizDraft();showToast('再開できる途中演習がありません');renderQuizDraftPanel();return;}
+  quiz=draft;
+  quiz.index=normalizeQuizIndex(quiz);
+  quiz.answered=Boolean(quiz.items?.[quiz.index]?.graded);
+  state.quizDraft=serializableQuizDraft(quiz);
+  saveState(false);
+  $('quizSource').value=quiz.source;
+  $('quizMode').value=quiz.mode==='knowledge'||quiz.mode==='retry'?'recommended':quiz.mode;
+  $('quizSystem').value=quiz.system||'';
+  $('quizLength').value=String([5,10,20].includes(quiz.length)?quiz.length:10);
+  $('quizType').value=quiz.source==='subjectA'&&quiz.mode==='mock'?'mock':(quiz.type==='mock'?'mock':quiz.type||'mixed');
+  $('quizSetup').classList.add('hidden');
+  $('quizArea').classList.remove('hidden');
+  renderQuizQuestion();
+  showToast('途中から再開しました');
+}
+function restartQuizDraft(){
+  const draft=migrateQuizDraft(state.quizDraft);
+  if(!draft)return;
+  if(!confirm('途中の演習を破棄して最初からやり直しますか？累計成績は消えません。'))return;
+  const source=draft.source,mode=draft.mode,system=draft.system,type=draft.type,length=draft.length;
+  clearQuizDraft(false);
+  startQuiz({source,mode:mode==='knowledge'||mode==='retry'?'recommended':mode,system,length,type,force:true});
+}
+function deleteQuizDraft(){
+  if(!state.quizDraft)return;
+  if(!confirm('途中の演習データだけを削除しますか？累計成績は消えません。'))return;
+  clearQuizDraft();
+  renderQuizDraftPanel();
+  showToast('途中データを削除しました');
+}
+function handleQuizDraftPanelClick(event){
+  const action=event.target?.dataset?.quizDraftAction;
+  if(action==='resume')resumeQuizDraft();
+  if(action==='restart')restartQuizDraft();
+  if(action==='delete')deleteQuizDraft();
+}
+function renderQuizDraftPanel(){
+  const panel=$('quizDraftPanel');if(!panel)return;
+  const draft=migrateQuizDraft(state.quizDraft);
+  state.quizDraft=draft;
+  if(!draft){panel.classList.add('hidden');panel.innerHTML='';return;}
+  const answered=quizAnsweredCount(draft),last=formatDateTime(draft.updatedAt);
+  panel.classList.remove('hidden');
+  panel.innerHTML=`<div class="quiz-draft-head"><div><strong>途中の演習があります</strong><small>${esc(quizSourceLabel(draft.source))} / ${esc(quizModeLabel(draft.mode))} / ${esc(quizTypeLabel(draft.type))}</small></div><span class="badge gray">${answered}/${draft.length}</span></div><div class="quiz-draft-meta"><span>分野: ${esc(quizSystemLabel(draft.system))}</span><span>問題数: ${draft.length}</span><span>最終更新: ${esc(last)}</span></div><div class="quiz-draft-actions"><button class="primary" data-quiz-draft-action="resume" type="button">続きから再開</button><button class="secondary" data-quiz-draft-action="restart" type="button">最初からやり直す</button><button class="danger" data-quiz-draft-action="delete" type="button">途中データを削除</button></div>`;
+}
+function renderQuizView(){
+  renderQuizDraftPanel();
+  if(!quiz){
+    $('quizSetup').classList.remove('hidden');
+    $('quizArea').classList.add('hidden');
+    $('quizSessionStatus').textContent='';
+  }
+}
 function startKnowledgeTermPractice(termId,includeRelated=false){
   const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term)return;
+  if(state.quizDraft&&!confirm('途中の演習を破棄して、この用語の問題を開始しますか？'))return;
   const candidates=includeRelated?[term,...svc.getConnectedTerms(term.id)]:[term],seen=new Set(),appTerms=[];
   candidates.forEach(item=>{if(item.appTerm&&!seen.has(String(item.appTerm.id))){seen.add(String(item.appTerm.id));appTerms.push(item.appTerm);}});
   if(!appTerms.length){showToast('このノードに対応する問題を作れません');return;}
+  clearQuizDraft(false);
   navTo('quiz');$('quizSource').value='terms';$('quizMode').value='recommended';$('quizType').value='mixed';
   const selected=appTerms.slice(0,Math.min(8,appTerms.length));
-  quiz={source:'terms',mode:'knowledge',system:'',type:'mixed',length:selected.length,index:0,correct:0,answered:false,items:selected.map(t=>makeQuestion(t,'mixed')),results:[],startedAt:Date.now()};
+  quiz={sessionId:quizSessionId(),source:'terms',mode:'knowledge',system:'',type:'mixed',length:selected.length,index:0,correct:0,answered:false,items:selected.map(t=>makeQuestion(t,'mixed')),results:[],startedAt:Date.now(),completed:false};
+  persistQuizDraft();
   $('quizSetup').classList.add('hidden');$('quizArea').classList.remove('hidden');renderQuizQuestion();
 }
 
 function selectPool(mode,system,length=10){let pool=TERMS.filter(t=>!system||t['系']===system);if(mode==='recommended')return recommendedTerms(length,system);if(mode==='due'){pool=priorityReviewTerms(system);}else if(mode==='unlearned'){const u=pool.filter(t=>readTermState(t.id).mastery===0);if(u.length>=4)pool=u;}else if(mode==='weak'){pool=pool.sort((a,b)=>termScore(b)-termScore(a)).slice(0,Math.max(30,Math.ceil(pool.length*.25)));}return pool.length?pool:TERMS.filter(t=>!system||t['系']===system);}
 function subjectPool(mode,system,length=10){let pool=SUBJECT_A.filter(q=>!system||q.system===system);if(mode==='weak'){const weak=pool.filter(q=>getSubjectState(q.id).wrong>0).sort((a,b)=>getSubjectState(b.id).wrong-getSubjectState(a.id).wrong);if(weak.length)pool=weak;}else if(mode==='unlearned'){const fresh=pool.filter(q=>getSubjectState(q.id).correct+getSubjectState(q.id).wrong===0);if(fresh.length)pool=fresh;}else if(mode==='mock'){return sample(pool,Math.min(Math.max(length,20),pool.length));}else if(mode==='recommended'||mode==='due'){const weak=pool.filter(q=>getSubjectState(q.id).wrong>0).sort((a,b)=>getSubjectState(b.id).wrong-getSubjectState(a.id).wrong),fresh=pool.filter(q=>getSubjectState(q.id).correct+getSubjectState(q.id).wrong===0),seen=new Set(),result=[];[weak,fresh,sample(pool,length)].forEach(group=>group.forEach(q=>{if(result.length<length&&!seen.has(q.id)){seen.add(q.id);result.push(q);}}));return result;}return sample(pool,Math.min(length,pool.length));}
 function sample(arr,n){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a.slice(0,n);}
-function startQuiz(overrides={}){const source=overrides.source||$('quizSource').value,mode=overrides.mode||$('quizMode').value,system=overrides.system??$('quizSystem').value,length=Number(overrides.length||$('quizLength').value);let type=overrides.type||$('quizType').value;if(source==='subjectA')return startSubjectQuiz({mode,system,length,type});if(type==='mock')type='mixed';const pool=selectPool(mode,system,length);const chosen=mode==='recommended'?pool.slice(0,Math.min(length,pool.length)):sample(pool,Math.min(length,pool.length));quiz={source:'terms',mode,system,type,length:chosen.length,index:0,correct:0,answered:false,items:chosen.map(t=>makeQuestion(t,type)),results:[],startedAt:Date.now()};$('quizSetup').classList.add('hidden');$('quizArea').classList.remove('hidden');renderQuizQuestion();}
-function startSubjectQuiz({mode='random',system='',length=10,type='mixed'}={}){const actualMode=type==='mock'?'mock':mode,pool=subjectPool(actualMode,system,length);if(!pool.length){showToast('科目Aの問題がありません');return;}quiz={source:'subjectA',mode:actualMode,system,type,length:pool.length,index:0,correct:0,answered:false,items:pool.map(makeSubjectQuestion),results:[],startedAt:Date.now()};$('quizSource').value='subjectA';$('quizSetup').classList.add('hidden');$('quizArea').classList.remove('hidden');renderQuizQuestion();}
+function startQuiz(overrides={}){const replaceDraft=overrides.force||!state.quizDraft||confirm('途中の演習を破棄して新しく開始しますか？');if(!replaceDraft)return;const source=overrides.source||$('quizSource').value,mode=overrides.mode||$('quizMode').value,system=overrides.system??$('quizSystem').value,length=Number(overrides.length||$('quizLength').value);let type=overrides.type||$('quizType').value;if(source==='subjectA')return startSubjectQuiz({mode,system,length,type,force:true});if(type==='mock')type='mixed';clearQuizDraft(false);const pool=selectPool(mode,system,length);const chosen=mode==='recommended'?pool.slice(0,Math.min(length,pool.length)):sample(pool,Math.min(length,pool.length));quiz={sessionId:quizSessionId(),source:'terms',mode,system,type,length:chosen.length,index:0,correct:0,answered:false,items:chosen.map(t=>makeQuestion(t,type)),results:[],startedAt:Date.now(),completed:false};persistQuizDraft();$('quizSetup').classList.add('hidden');$('quizArea').classList.remove('hidden');renderQuizQuestion();}
+function startSubjectQuiz({mode='random',system='',length=10,type='mixed',force=false}={}){if(state.quizDraft&&!force&&!confirm('途中の演習を破棄して新しく開始しますか？'))return;const actualMode=type==='mock'?'mock':mode,pool=subjectPool(actualMode,system,length);if(!pool.length){showToast('科目Aの問題がありません');return;}clearQuizDraft(false);quiz={sessionId:quizSessionId(),source:'subjectA',mode:actualMode,system,type,length:pool.length,index:0,correct:0,answered:false,items:pool.map(makeSubjectQuestion),results:[],startedAt:Date.now(),completed:false};persistQuizDraft();$('quizSource').value='subjectA';$('quizSetup').classList.add('hidden');$('quizArea').classList.remove('hidden');renderQuizQuestion();}
 function distractorsFor(target){let pool=TERMS.filter(t=>t.id!==target.id&&t['中分類']&&t['中分類']===target['中分類']);if(pool.length<3)pool=TERMS.filter(t=>t.id!==target.id&&t['大分類']===target['大分類']);if(pool.length<3)pool=TERMS.filter(t=>t.id!==target.id&&t['系']===target['系']);return sample(pool,3);}
 function makeQuestion(target,type){let qtype=type==='mixed'?(Math.random()<.5?'description':'term'):type;const ds=distractorsFor(target);if(qtype==='term')return {target,qtype,prompt:`「${target['用語']}」の説明として最も適切なものはどれですか。`,options:sample([target,...ds],4).map(t=>({id:t.id,label:t['基本解説']||`${t['用語']}に関する概念`}))};return {target,qtype,prompt:target['基本解説']||target['試験での着眼点'],options:sample([target,...ds],4).map(t=>({id:t.id,label:t['用語']}))};}
 function makeSubjectQuestion(q){return {source:'subjectA',target:q,qtype:'subjectA',prompt:q.question,options:q.choices.map((label,i)=>({id:String(i),label}))};}
-function renderQuizQuestion(){if(!quiz)return;if(quiz.index>=quiz.items.length){finishQuiz();return;}const q=quiz.items[quiz.index],metaSystem=q.source==='subjectA'?q.target.system:q.target['系'],metaCategory=q.source==='subjectA'?q.target.category:q.target['中分類'];quiz.answered=false;$('quizSessionStatus').textContent=`${quiz.index+1} / ${quiz.length}`;$('quizArea').innerHTML=`<article class="quiz-card"><div class="quiz-meta"><span>${esc(metaSystem)} › ${esc(metaCategory)}</span><span>${quiz.index+1}/${quiz.length}</span></div><div class="progress-track" style="margin-top:10px"><span style="width:${quiz.index/quiz.length*100}%"></span></div><p class="quiz-question">${esc(q.prompt)}</p><div class="option-list">${q.options.map((o,i)=>`<button class="option" data-answer-id="${esc(o.id)}" type="button"><span>${String.fromCharCode(65+i)}.</span> ${esc(o.label)}</button>`).join('')}</div><div id="quizFeedback"></div></article>`;$$('[data-answer-id]').forEach(b=>b.onclick=()=>answerQuestion(b.dataset.answerId,b));}
+function quizSessionHeaderHtml(q,metaSystem,metaCategory){
+  return `<div class="quiz-session-panel"><div class="quiz-session-actions"><button id="returnQuizSetupButton" class="secondary" type="button">演習設定に戻る</button><button id="saveQuizDraftButton" class="secondary" type="button">中断して保存</button></div><div class="quiz-session-stats"><span>進捗 <b>${quiz.index+1}/${quiz.length}</b></span><span>正解 <b>${quiz.correct}</b></span><span>分野 <b>${esc(quizSystemLabel(quiz.system||metaSystem))}</b></span><span>モード <b>${esc(quizModeLabel(quiz.mode))}</b></span><span>形式 <b>${esc(quizTypeLabel(quiz.type||q.qtype))}</b></span></div></div>`;
+}
+function renderStoredQuizFeedback(q){
+  if(!q.graded)return '';
+  return q.source==='subjectA'?subjectFeedbackHtml(q,Boolean(q.correct)):termFeedbackHtml(q,String(q.userAnswer),Boolean(q.correct));
+}
+function subjectFeedbackHtml(q,correct){
+  const target=q.target,linkedNames=Array.isArray(q.linkedTermNames)?q.linkedTermNames:[];
+  const linkedHtml=linkedNames.length?`<div class="explanation-block"><h4>知識マップ反映</h4><p>${linkedNames.map(esc).join('、')} の習熟度と復習予定を更新しました。</p></div>`:'';
+  return `<div class="explanation"><strong>${correct?'正解':'不正解'}</strong><p><b>正解：</b>${esc(target.choices[target.answer])}</p><div class="explanation-block"><h4>解説</h4><p>${esc(target.explanation)}</p></div><div class="explanation-block"><h4>関連語</h4><div class="badges">${target.relatedTerms.map(x=>`<span class="badge gray">${esc(x)}</span>`).join('')}</div></div>${linkedHtml}<div class="quiz-actions"><button id="nextQuestionButton" class="primary" type="button">${quiz.index+1>=quiz.length?'結果を見る':'次の問題'}</button></div></div>`;
+}
+function termFeedbackHtml(q,selectedId,correct){
+  const linkedNames=Array.isArray(q.linkedTermNames)?q.linkedTermNames:[],linkedHtml=linkedNames.length?`<div class="explanation-block"><h4>知識マップ反映</h4><p>関連・前提用語 ${linkedNames.map(esc).join('、')} にも小さく反映しました。</p></div>`:'';
+  return `<div class="explanation"><strong>${correct?'正解':'不正解'}</strong><p><b>正解：</b>${esc(q.target['用語'])}</p>${answerExplanation(q,selectedId,correct)}${linkedHtml}<div class="rating-row"><button data-rating="1" ${q.reviewRating?'disabled':''}>もう一度</button><button data-rating="3" ${q.reviewRating?'disabled':''}>難しい</button><button data-rating="4" ${q.reviewRating?'disabled':''}>理解</button><button data-rating="5" ${q.reviewRating?'disabled':''}>簡単</button></div><div class="quiz-actions"><button id="nextQuestionButton" class="primary" type="button">${quiz.index+1>=quiz.length?'結果を見る':'次の問題'}</button></div></div>`;
+}
+function bindRenderedQuizControls(){
+  $('returnQuizSetupButton')?.addEventListener('click',()=>pauseQuizToSetup({message:'演習状態を保存して設定へ戻りました'}));
+  $('saveQuizDraftButton')?.addEventListener('click',()=>pauseQuizToSetup({message:'途中の演習を保存しました'}));
+  $('nextQuestionButton')?.addEventListener('click',()=>{quiz.index++;quiz.answered=false;if(quiz.index<quiz.length)persistQuizDraft();renderQuizQuestion();});
+  $$('[data-rating]').forEach(b=>b.onclick=()=>{const q=quiz?.items?.[quiz.index];if(!q||q.reviewRating)return;scheduleReview(q.target.id,Number(b.dataset.rating));q.reviewRating=Number(b.dataset.rating);persistQuizDraft();$$('[data-rating]').forEach(x=>x.disabled=true);showToast('復習間隔を更新しました');});
+}
+function renderQuizQuestion(){
+  if(!quiz)return;
+  recalcQuizScore(quiz);
+  if(quiz.index>=quiz.items.length){finishQuiz();return;}
+  const q=quiz.items[quiz.index],metaSystem=q.source==='subjectA'?q.target.system:q.target['系'],metaCategory=q.source==='subjectA'?q.target.category:q.target['中分類'],graded=Boolean(q.graded);
+  quiz.answered=graded;
+  $('quizSessionStatus').textContent=`${quiz.index+1} / ${quiz.length}`;
+  $('quizArea').innerHTML=`<article class="quiz-card">${quizSessionHeaderHtml(q,metaSystem,metaCategory)}<div class="quiz-meta"><span>${esc(metaSystem)} › ${esc(metaCategory)}</span><span>${quiz.index+1}/${quiz.length}</span></div><div class="progress-track" style="margin-top:10px"><span style="width:${quiz.index/quiz.length*100}%"></span></div><p class="quiz-question">${esc(q.prompt)}</p><div class="option-list">${q.options.map((o,i)=>{const id=String(o.id),isCorrect=q.source==='subjectA'?Number(id)===Number(q.target.answer):id===String(q.target.id),isSelected=graded&&id===String(q.userAnswer),className=graded&&isCorrect?' correct':graded&&isSelected&&!isCorrect?' wrong':'';return `<button class="option${className}" data-answer-id="${esc(id)}" type="button" ${graded?'disabled':''}><span>${String.fromCharCode(65+i)}.</span> ${esc(o.label)}</button>`;}).join('')}</div><div id="quizFeedback">${renderStoredQuizFeedback(q)}</div></article>`;
+  if(!graded)$$('[data-answer-id]').forEach(b=>b.onclick=()=>answerQuestion(b.dataset.answerId,b));
+  bindRenderedQuizControls();
+}
 function answerExplanation(q,id,correct){const selected=termById.get(String(id));const target=q.target;const reason=target['試験での着眼点']||target['基本解説']||'定義と使いどころを確認しましょう。';const selectedText=selected&&String(selected.id)!==String(target.id)?`<div class="explanation-block"><h4>選んだ選択肢との違い</h4><p>選んだ「${esc(selected['用語'])}」は「${esc(firstSentence(selected['基本解説'],96))}」です。正解の「${esc(target['用語'])}」とは、問われている対象・目的・使いどころが異なります。</p></div>`:`<div class="explanation-block"><h4>見分けポイント</h4><p>近い用語が選択肢に並ぶため、説明文の主語、目的、使われる場面を先に確認すると判断しやすくなります。</p></div>`;return `<div class="explanation-block"><h4>正解理由</h4><p><b>${esc(target['用語'])}</b> は ${esc(firstSentence(target['基本解説'],120))}</p><p>${esc(reason)}</p></div>${selectedText}`;}
 function answerSubjectQuestion(id,button){
   if(!quiz||quiz.answered)return;
@@ -1195,12 +1389,12 @@ function answerSubjectQuestion(id,button){
   state.subjectA.attempts.push({id:target.id,correct,date:today,ts:Date.now(),mode:quiz.mode,system:target.system,category:target.category});
   quiz.results.push({id:target.id,correct,source:'subjectA',system:target.system});
   const linkedTerms=applySubjectQuestionTermProgress(target.id,correct);
+  q.userAnswer=String(id);q.correct=correct;q.graded=true;q.answeredAt=Date.now();q.linkedTermNames=linkedTerms.map(t=>t.name);
   $$('[data-answer-id]').forEach(b=>{b.disabled=true;if(Number(b.dataset.answerId)===Number(target.answer))b.classList.add('correct');});
   if(!correct)button.classList.add('wrong');
-  saveState(false);
-  const linkedHtml=linkedTerms.length?`<div class="explanation-block"><h4>知識マップ反映</h4><p>${linkedTerms.map(t=>esc(t.name)).join('、')} の習熟度と復習予定を更新しました。</p></div>`:'';
-  $('quizFeedback').innerHTML=`<div class="explanation"><strong>${correct?'正解':'不正解'}</strong><p><b>正解：</b>${esc(target.choices[target.answer])}</p><div class="explanation-block"><h4>解説</h4><p>${esc(target.explanation)}</p></div><div class="explanation-block"><h4>関連語</h4><div class="badges">${target.relatedTerms.map(x=>`<span class="badge gray">${esc(x)}</span>`).join('')}</div></div>${linkedHtml}<div class="quiz-actions"><button id="nextQuestionButton" class="primary" type="button">${quiz.index+1>=quiz.length?'結果を見る':'次の問題'}</button></div></div>`;
-  $('nextQuestionButton').onclick=()=>{quiz.index++;renderQuizQuestion();};
+  persistQuizDraft();
+  $('quizFeedback').innerHTML=subjectFeedbackHtml(q,correct);
+  bindRenderedQuizControls();
 }
 function answerQuestion(id,button){
   if(!quiz||quiz.answered)return;
@@ -1219,14 +1413,40 @@ function answerQuestion(id,button){
   if(!correct)button.classList.add('wrong');
   scheduleReview(q.target.id,correct?4:1);
   const linkedTerms=applyKnowledgeRelatedProgress(q.target.id,correct,String(q.target.id));
-  saveState(false);
-  const linkedHtml=linkedTerms.length?`<div class="explanation-block"><h4>知識マップ反映</h4><p>関連・前提用語 ${linkedTerms.map(t=>esc(t.name)).join('、')} にも小さく反映しました。</p></div>`:'';
-  $('quizFeedback').innerHTML=`<div class="explanation"><strong>${correct?'正解':'不正解'}</strong><p><b>正解：</b>${esc(q.target['用語'])}</p>${answerExplanation(q,id,correct)}${linkedHtml}<div class="rating-row"><button data-rating="1">もう一度</button><button data-rating="3">難しい</button><button data-rating="4">理解</button><button data-rating="5">簡単</button></div><div class="quiz-actions"><button id="nextQuestionButton" class="primary" type="button">${quiz.index+1>=quiz.length?'結果を見る':'次の問題'}</button></div></div>`;
-  $$('[data-rating]').forEach(b=>b.onclick=()=>{scheduleReview(q.target.id,Number(b.dataset.rating));saveState(false);$$('[data-rating]').forEach(x=>x.disabled=true);showToast('復習間隔を更新しました');});
-  $('nextQuestionButton').onclick=()=>{quiz.index++;renderQuizQuestion();};
+  q.userAnswer=String(id);q.correct=correct;q.graded=true;q.answeredAt=Date.now();q.linkedTermNames=linkedTerms.map(t=>t.name);
+  persistQuizDraft();
+  $('quizFeedback').innerHTML=termFeedbackHtml(q,String(id),correct);
+  bindRenderedQuizControls();
 }
 function scheduleReview(id,quality){const s=getTermState(id),today=localDate();s.updatedAt=today;if(quality<3){s.repetitions=0;s.interval=1;s.ease=Math.max(1.3,s.ease-.2);s.due=addDays(today,1);s.nextReview=s.due;s.reviewPriority=termById.has(String(id))?reviewPriority(termById.get(String(id))):0;return;}s.repetitions=(s.repetitions||0)+1;if(s.repetitions===1)s.interval=1;else if(s.repetitions===2)s.interval=3;else s.interval=Math.max(1,Math.round((s.interval||3)*(s.ease||2.5)));s.ease=Math.max(1.3,(s.ease||2.5)+(0.1-(5-quality)*(0.08+(5-quality)*0.02)));s.due=addDays(today,s.interval);s.nextReview=s.due;s.mastery=clamp(Math.max(s.mastery,quality===5?4:3),0,5);s.reviewPriority=termById.has(String(id))?reviewPriority(termById.get(String(id))):0;}
-function finishQuiz(){const pct=Math.round(quiz.correct/quiz.length*100),wrong=quiz.length-quiz.correct,duration=Math.round((Date.now()-quiz.startedAt)/1000),weak=quizWeakSystems(quiz.results),session={date:localDate(),ts:Date.now(),source:quiz.source,mode:quiz.mode,total:quiz.length,correct:quiz.correct,durationSec:duration};if(quiz.source==='subjectA')state.subjectA.sessions.push(session);else state.sessions.push(session);saveState(false);$('quizArea').classList.add('hidden');$('quizSetup').classList.remove('hidden');$('quizSessionStatus').textContent='';$('resultDialogContent').innerHTML=`<div class="dialog-head"><div><p class="eyebrow">Session complete</p><h2>演習結果</h2></div><button class="close-button" data-close-result type="button">×</button></div><div class="result-score"><strong>${pct}%</strong><span>${quiz.correct} / ${quiz.length}問正解</span></div><div class="result-breakdown"><div><strong>${quiz.correct}</strong><small>正解</small></div><div><strong>${wrong}</strong><small>誤答</small></div><div><strong>${duration}秒</strong><small>所要時間</small></div></div><section class="result-insight"><h3>次のおすすめ</h3><p>${esc(nextActionText(pct,wrong))}</p><p class="help"><b>苦手分野:</b> ${weak.length?'誤答が出た分野を優先して復習しましょう。':'今回の結果では大きな偏りはありません。'}</p><div class="badges">${weak.length?weak.map(([system,count])=>`<span class="badge bad">${esc(system)} ${count}問</span>`).join(''):'<span class="badge good">大きな苦手分野なし</span>'}</div></section><div class="dialog-actions"><button id="retryWeakButton" class="secondary" type="button" ${wrong?'':'disabled'}>間違えた問題を復習</button><button id="nextRecommendedButton" class="primary" type="button">おすすめ演習へ</button></div>`;const d=$('resultDialog'),source=quiz.source;d.showModal();qs('[data-close-result]').onclick=()=>{d.close();renderAll();};$('retryWeakButton').onclick=()=>{const ids=new Set(quiz.results.filter(r=>!r.correct).map(r=>String(r.id)));d.close();if(!ids.size){showToast('間違えた問題はありません');return;}if(source==='subjectA'){const selected=SUBJECT_A.filter(q=>ids.has(String(q.id)));quiz={source:'subjectA',mode:'retry',system:'',type:'mixed',length:selected.length,index:0,correct:0,answered:false,items:selected.map(makeSubjectQuestion),results:[],startedAt:Date.now()};}else{const selected=TERMS.filter(t=>ids.has(String(t.id)));quiz={source:'terms',mode:'retry',system:'',type:'mixed',length:selected.length,index:0,correct:0,answered:false,items:selected.map(t=>makeQuestion(t,'mixed')),results:[],startedAt:Date.now()};}$('quizSetup').classList.add('hidden');$('quizArea').classList.remove('hidden');renderQuizQuestion();};$('nextRecommendedButton').onclick=()=>{d.close();if(source==='subjectA'){startQuiz({source:'subjectA',mode:'recommended',length:10});return;}$('quizSource').value='terms';$('quizMode').value='recommended';startQuiz({source:'terms',mode:'recommended',length:10});};renderAll();}
+function finishQuiz(){
+  recalcQuizScore(quiz);
+  const pct=Math.round(quiz.correct/quiz.length*100),wrong=quiz.length-quiz.correct,duration=Math.round((Date.now()-quiz.startedAt)/1000),weak=quizWeakSystems(quiz.results),session={date:localDate(),ts:Date.now(),source:quiz.source,mode:quiz.mode,total:quiz.length,correct:quiz.correct,durationSec:duration};
+  quiz.completed=true;
+  clearQuizDraft(false);
+  if(quiz.source==='subjectA')state.subjectA.sessions.push(session);else state.sessions.push(session);
+  saveState(false);
+  $('quizArea').classList.add('hidden');$('quizSetup').classList.remove('hidden');$('quizSessionStatus').textContent='';renderQuizDraftPanel();
+  $('resultDialogContent').innerHTML=`<div class="dialog-head"><div><p class="eyebrow">Session complete</p><h2>演習結果</h2></div><button class="close-button" data-close-result type="button">×</button></div><div class="result-score"><strong>${pct}%</strong><span>${quiz.correct} / ${quiz.length}問正解</span></div><div class="result-breakdown"><div><strong>${quiz.correct}</strong><small>正解</small></div><div><strong>${wrong}</strong><small>誤答</small></div><div><strong>${duration}秒</strong><small>所要時間</small></div></div><section class="result-insight"><h3>次のおすすめ</h3><p>${esc(nextActionText(pct,wrong))}</p><p class="help"><b>苦手分野:</b> ${weak.length?'誤答が出た分野を優先して復習しましょう。':'今回の結果では大きな偏りはありません。'}</p><div class="badges">${weak.length?weak.map(([system,count])=>`<span class="badge bad">${esc(system)} ${count}問</span>`).join(''):'<span class="badge good">大きな苦手分野なし</span>'}</div></section><div class="dialog-actions"><button id="retryWeakButton" class="secondary" type="button" ${wrong?'':'disabled'}>間違えた問題を復習</button><button id="nextRecommendedButton" class="primary" type="button">おすすめ演習へ</button></div>`;
+  const d=$('resultDialog'),source=quiz.source,finishedResults=quiz.results.slice();
+  d.showModal();
+  qs('[data-close-result]').onclick=()=>{d.close();quiz=null;renderAll();};
+  $('retryWeakButton').onclick=()=>{
+    const ids=new Set(finishedResults.filter(r=>!r.correct).map(r=>String(r.id)));d.close();
+    if(!ids.size){showToast('間違えた問題はありません');return;}
+    if(source==='subjectA'){
+      const selected=SUBJECT_A.filter(q=>ids.has(String(q.id)));
+      quiz={sessionId:quizSessionId(),source:'subjectA',mode:'retry',system:'',type:'mixed',length:selected.length,index:0,correct:0,answered:false,items:selected.map(makeSubjectQuestion),results:[],startedAt:Date.now(),completed:false};
+    }else{
+      const selected=TERMS.filter(t=>ids.has(String(t.id)));
+      quiz={sessionId:quizSessionId(),source:'terms',mode:'retry',system:'',type:'mixed',length:selected.length,index:0,correct:0,answered:false,items:selected.map(t=>makeQuestion(t,'mixed')),results:[],startedAt:Date.now(),completed:false};
+    }
+    persistQuizDraft();$('quizSetup').classList.add('hidden');$('quizArea').classList.remove('hidden');renderQuizQuestion();
+  };
+  $('nextRecommendedButton').onclick=()=>{d.close();quiz=null;if(source==='subjectA'){startQuiz({source:'subjectA',mode:'recommended',length:10,force:true});return;}$('quizSource').value='terms';$('quizMode').value='recommended';startQuiz({source:'terms',mode:'recommended',length:10,force:true});};
+  quiz=null;
+  renderAll();
+}
 
 function reviewCard(t){const s=readTermState(t.id),priority=reviewPriority(t),status=reviewStatus(t);return `<button class="stack-item review-card term-link text-button" data-term-id="${esc(t.id)}"><span class="stack-item-main"><strong>${esc(t['用語'])}</strong><small>${esc(status.label)}・次回 ${esc(formatReviewDate(reviewDate(s)))}・誤答${s.wrong}・連続正解${s.streak}</small><span class="badges">${statusBadge(t)}<span class="badge gray">Lv.${formatMastery(s.mastery)}</span></span></span><span class="review-priority"><b>${priority}</b><small>優先度</small></span></button>`;}
 function reviewTerms(){if(reviewFilter==='wrong')return TERMS.filter(t=>readTermState(t.id).wrong>0).sort((a,b)=>reviewPriority(b)-reviewPriority(a)||readTermState(b.id).wrong-readTermState(a.id).wrong);if(reviewFilter==='bookmark')return TERMS.filter(t=>readTermState(t.id).bookmark).sort((a,b)=>reviewPriority(b)-reviewPriority(a));return priorityReviewTerms();}
