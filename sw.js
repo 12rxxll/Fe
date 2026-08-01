@@ -1,4 +1,4 @@
-const CACHE = 'fe-learning-os-v2-20260801-memorization-mode-v17';
+const CACHE = 'fe-learning-os-v2-20260801-memorization-rating-v18';
 const ASSET_PATHS = [
   './',
   './index.html',

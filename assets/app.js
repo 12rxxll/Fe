@@ -7,7 +7,7 @@ const KNOWLEDGE_TERMS = knowledgeMapTermsToGlossary(KMAP_DATA);
 const TERMS = mergeTerms(CORE_TERMS, SYLLABUS_TERMS, KNOWLEDGE_TERMS);
 const SUBJECT_A = Array.isArray(window.FE_SUBJECT_A_QUESTIONS) ? window.FE_SUBJECT_A_QUESTIONS : [];
 const STORAGE_KEY = 'fe-learning-os-v2';
-const DATA_SCHEMA = 8;
+const DATA_SCHEMA = 9;
 const DAY = 86400000;
 const NOTE_MIN_CHARS = 10;
 const NOTE_BATCH_MAX_TERMS = 20;
@@ -23,7 +23,7 @@ const MEMORIZATION_DEFAULTS = {
   panelVisible:true
 };
 const defaultMemorizationSettings = () => Object.assign({}, MEMORIZATION_DEFAULTS);
-const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system',memorization:defaultMemorizationSettings()},terms:{},knowledgeNotes:{},termNotes:{},chatgptSubmissionBatches:[],attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
+const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system',memorization:defaultMemorizationSettings()},terms:{},knowledgeNotes:{},termNotes:{},memorizationRatings:{},chatgptSubmissionBatches:[],attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
 let needsMigrationSave = false;
 let state = loadState();
 let currentView = 'home';
@@ -116,6 +116,16 @@ function migrateTermState(value={}){const s=Object.assign(emptyTermState(),value
 function emptyTermNoteRecord(content=''){return {content:String(content||''),updatedAt:null,writingStatus:'empty',reviewStatus:'unreviewed',reviewedAt:null,lastSubmittedContent:'',lastSubmittedHash:'',lastSubmittedAt:null,lastSubmissionBatchId:null,feedbackMemo:''};}
 function migrateTermNoteRecord(value={}){const s=typeof value==='string'?{content:value}:Object.assign(emptyTermNoteRecord(),value||{});s.content=String(s.content||'');s.updatedAt=s.updatedAt||null;s.writingStatus=s.writingStatus||'empty';s.reviewStatus=s.reviewStatus||'unreviewed';s.reviewedAt=s.reviewedAt||null;s.lastSubmittedContent=String(s.lastSubmittedContent||'');s.lastSubmittedHash=String(s.lastSubmittedHash||'');s.lastSubmittedAt=s.lastSubmittedAt||null;s.lastSubmissionBatchId=s.lastSubmissionBatchId||null;s.feedbackMemo=String(s.feedbackMemo||'');return s;}
 function migrateSubmissionBatch(value={}){const s=Object.assign({id:'',createdAt:null,termIds:[],termNames:[],category:'',firstTerm:'',lastTerm:'',itemCount:0,totalCharacters:0,promptHash:'',status:'prepared'},value||{});s.termIds=Array.isArray(s.termIds)?s.termIds.map(String):[];s.termNames=Array.isArray(s.termNames)?s.termNames.map(String):[];s.itemCount=Math.max(0,Number(s.itemCount)||s.termIds.length);s.totalCharacters=Math.max(0,Number(s.totalCharacters)||0);s.status=String(s.status||'prepared');return s;}
+function emptyMemorizationRating(){return {lastRating:null,ratedAt:null,knownCount:0,unsureCount:0,unknownCount:0};}
+function migrateMemorizationRating(value={}){
+  const s=Object.assign(emptyMemorizationRating(),value&&typeof value==='object'?value:{});
+  s.lastRating=['known','unsure','unknown'].includes(s.lastRating)?s.lastRating:null;
+  s.ratedAt=s.ratedAt||null;
+  s.knownCount=Math.max(0,Number(s.knownCount)||0);
+  s.unsureCount=Math.max(0,Number(s.unsureCount)||0);
+  s.unknownCount=Math.max(0,Number(s.unknownCount)||0);
+  return s;
+}
 function migrateMemorizationSettings(value={}){
   const raw=value&&typeof value==='object'?value:{},s=Object.assign(defaultMemorizationSettings(),raw);
   s.enabled=Boolean(s.enabled);
@@ -127,7 +137,7 @@ function migrateMemorizationSettings(value={}){
   s.panelVisible=s.panelVisible!==false;
   return s;
 }
-function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.settings=s.settings&&typeof s.settings==='object'?Object.assign(defaultState().settings,s.settings||{}):defaultState().settings;s.settings.memorization=migrateMemorizationSettings(s.settings.memorization);s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches.map(migrateSubmissionBatch):[];s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
+function migrateState(s,sourceSchema=2){if((Number(sourceSchema)||2)<DATA_SCHEMA)needsMigrationSave=true;s.schemaVersion=DATA_SCHEMA;s.settings=s.settings&&typeof s.settings==='object'?Object.assign(defaultState().settings,s.settings||{}):defaultState().settings;s.settings.memorization=migrateMemorizationSettings(s.settings.memorization);s.terms=s.terms&&typeof s.terms==='object'?s.terms:{};Object.keys(s.terms).forEach(id=>{s.terms[id]=migrateTermState(s.terms[id]);});s.knowledgeNotes=s.knowledgeNotes&&typeof s.knowledgeNotes==='object'?s.knowledgeNotes:{};s.termNotes=s.termNotes&&typeof s.termNotes==='object'?s.termNotes:{};Object.keys(s.termNotes).forEach(id=>{s.termNotes[id]=migrateTermNoteRecord(s.termNotes[id]);});s.memorizationRatings=s.memorizationRatings&&typeof s.memorizationRatings==='object'?s.memorizationRatings:{};Object.keys(s.memorizationRatings).forEach(id=>{s.memorizationRatings[id]=migrateMemorizationRating(s.memorizationRatings[id]);});s.chatgptSubmissionBatches=Array.isArray(s.chatgptSubmissionBatches)?s.chatgptSubmissionBatches.map(migrateSubmissionBatch):[];s.attempts=Array.isArray(s.attempts)?s.attempts:[];s.sessions=Array.isArray(s.sessions)?s.sessions:[];s.subjectA=s.subjectA&&typeof s.subjectA==='object'?s.subjectA:{questions:{},attempts:[],sessions:[]};s.subjectA.questions=s.subjectA.questions&&typeof s.subjectA.questions==='object'?s.subjectA.questions:{};s.subjectA.attempts=Array.isArray(s.subjectA.attempts)?s.subjectA.attempts:[];s.subjectA.sessions=Array.isArray(s.subjectA.sessions)?s.subjectA.sessions:[];return s;}
 function termStateNeedsMigration(s){return !('nextReview' in s)||!('lastCorrect' in s)||!('lastWrong' in s)||!('reviewPriority' in s)||!('knowledgeCorrect' in s)||!('knowledgeWrong' in s)||!('consecutiveIncorrect' in s)||!('weakReasons' in s);}
 function readTermState(id){id=String(id);if(!state.terms[id])return emptyTermState();if(termStateNeedsMigration(state.terms[id]))state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
 function getTermState(id){id=String(id);if(!state.terms[id]) state.terms[id]=emptyTermState();else if(termStateNeedsMigration(state.terms[id])) state.terms[id]=migrateTermState(state.terms[id]);return state.terms[id];}
@@ -148,7 +158,8 @@ function daysWithActivity(){return unique(state.attempts.map(a=>a.date)).sort();
 function currentStreak(){const set=new Set(daysWithActivity());let d=new Date(localDate()+'T12:00:00');if(!set.has(localDate(d))){d.setDate(d.getDate()-1);}let n=0;while(set.has(localDate(d))){n++;d.setDate(d.getDate()-1);}return n;}
 function bestStreak(){const days=daysWithActivity();if(!days.length)return 0;let best=1,run=1;for(let i=1;i<days.length;i++){const a=new Date(days[i-1]+'T12:00:00'),b=new Date(days[i]+'T12:00:00');if(Math.round((b-a)/DAY)===1)run++;else run=1;best=Math.max(best,run);}return best;}
 function examStatus(){const value=state.settings.examDate;if(!value)return '試験日未設定';const today=new Date(localDate()+'T12:00:00'),exam=new Date(value+'T12:00:00');if(Number.isNaN(exam.getTime()))return '試験日未設定';const days=Math.ceil((exam-today)/DAY);if(days<0)return `試験日から${Math.abs(days)}日経過`;if(days===0)return '試験日当日';return `試験まで${days}日`;}
-function isUnlearnedTerm(t){const s=readTermState(t.id);return s.mastery===0&&s.correct+s.wrong===0;}
+function memorizationRatingTotal(termId){const r=getMemorizationRatingRecord(termId,false);return r.knownCount+r.unsureCount+r.unknownCount;}
+function isUnlearnedTerm(t){const s=readTermState(t.id);return s.mastery===0&&s.correct+s.wrong===0&&memorizationRatingTotal(t.id)===0;}
 function isForgettingTerm(t){const s=readTermState(t.id);if(isUnlearnedTerm(t))return false;const stale=daysSince(s.last)>=Math.max(3,(s.interval||3)*2),lowMastery=s.mastery<=2&&daysSince(s.last)>=1;return (s.wrong>0&&s.streak<3)||lowMastery||stale;}
 function reviewStatus(t){const s=readTermState(t.id),due=reviewDate(s),today=localDate();if(isUnlearnedTerm(t))return {key:'unlearned',label:'未学習',className:'gray'};if(due&&due<=today)return {key:'due',label:'復習期限',className:''};if(isForgettingTerm(t))return {key:'forgetting',label:'忘れかけ',className:'bad'};if(s.mastery>=4&&s.streak>=3)return {key:'mastered',label:'習得済み',className:'good'};return {key:'learning',label:'学習中',className:'gray'};}
 function reviewPriority(t){const s=readTermState(t.id),due=reviewDate(s),today=localDate(),overdue=due?Math.max(0,diffDays(due,today)):0,lastGap=daysSince(s.last),total=s.correct+s.wrong,acc=total?s.correct/total:.5;const dueBoost=due&&due<=today?36+overdue*4:0,masteryRisk=(5-s.mastery)*9,wrongRisk=s.wrong*7,accuracyRisk=(1-acc)*18,staleRisk=!isUnlearnedTerm(t)?Math.min(28,Math.max(0,lastGap-(s.interval||3))*2):0,streakRelief=Math.min(s.streak,6)*4;return Math.max(0,Math.round(dueBoost+masteryRisk+wrongRisk+accuracyRisk+staleRisk-streakRelief));}
@@ -388,9 +399,22 @@ function knowledgeWritingQuestion(term,svc){
   return `『${term.name}』とは何ですか？ FEで問われるポイントを、自分の言葉で説明してください。`;
 }
 function noteReviewOption(value,label,current){return `<option value="${esc(value)}" ${current===value?'selected':''}>${esc(label)}</option>`;}
+function getMemorizationRatingRecord(termId,create=false){
+  termId=String(termId||'');
+  if(!state.memorizationRatings||typeof state.memorizationRatings!=='object')state.memorizationRatings={};
+  let record=state.memorizationRatings[termId];
+  if(record)record=state.memorizationRatings[termId]=migrateMemorizationRating(record);
+  if(!record&&create)record=state.memorizationRatings[termId]=emptyMemorizationRating();
+  return record||emptyMemorizationRating();
+}
+function memorizationRatingLabel(value){return ({known:'覚えていた',unsure:'あいまい',unknown:'覚えていなかった'})[value]||'未評価';}
+function renderMemorizationRatingSection(term){
+  const record=getMemorizationRatingRecord(term.id,false),last=memorizationRatingLabel(record.lastRating),lastDate=record.ratedAt?formatDateTime(record.ratedAt):'未記録';
+  return `<div class="memorization-rating" data-memorization-rating-panel="${esc(term.id)}"><div><strong>暗記自己評価</strong><small>テスト正答率とは別に保存します。最終: ${esc(last)} / ${esc(lastDate)}</small></div><div class="memorization-rating-actions" role="group" aria-label="${esc(term.name)}の暗記自己評価">${['known','unsure','unknown'].map(value=>`<button class="secondary ${record.lastRating===value?'active':''}" data-memorization-rating-term="${esc(term.id)}" data-memorization-rating="${value}" type="button">${esc(memorizationRatingLabel(value))}</button>`).join('')}</div><small class="subtle">累計: 覚えていた ${record.knownCount} / あいまい ${record.unsureCount} / 覚えていなかった ${record.unknownCount}</small></div>`;
+}
 function renderKnowledgeNoteSection(term,svc,heading='h5'){
   const record=getTermNoteRecord(term,false),review=record.reviewStatus||'unreviewed';
-  return `<section class="map-detail-section knowledge-note-section"><div class="note-section-head"><${heading}>自分の言葉でまとめる</${heading}><div class="note-inline-nav" role="group" aria-label="用語移動"><button class="secondary" data-note-move="-1" data-note-move-term="${esc(term.id)}" type="button">↑ 前へ</button><button class="secondary" data-note-move="1" data-note-move-term="${esc(term.id)}" type="button">↓ 次へ</button></div></div><p class="knowledge-note-question">${esc(knowledgeWritingQuestion(term,svc))}</p><div class="memorization-note-wrap" data-memorization-term="${esc(term.id)}"><textarea class="knowledge-note-area" data-map-note-term="${esc(term.id)}" placeholder="定義・仕組み・FEで重要な点を、自分の言葉で書いてください">${esc(readKnowledgeTermNote(term))}</textarea><div class="memorization-cover" data-memorization-cover="${esc(term.id)}" aria-hidden="true"><strong>あなたの記述は隠れています</strong><span>端末を傾ける、または「現在の答えを見る」を長押ししてください。</span></div></div><p class="help" data-map-note-status>目安: 1〜3文。完璧でなくても保存できます。後でChatGPTにまとめて確認できます。</p><div class="note-review-grid"><label>ChatGPT確認結果<select data-note-review-term="${esc(term.id)}">${noteReviewOption('unreviewed','未確認',review)}${noteReviewOption('correct','正しい',review)}${noteReviewOption('needs_fix','一部修正が必要',review)}${noteReviewOption('insufficient','理解不足',review)}</select></label><label>修正メモ<textarea class="feedback-note-area" data-note-feedback-term="${esc(term.id)}" placeholder="ChatGPTの指摘や直すポイントを書く">${esc(record.feedbackMemo||'')}</textarea></label></div></section>`;
+  return `<section class="map-detail-section knowledge-note-section"><div class="note-section-head"><${heading}>自分の言葉でまとめる</${heading}><div class="note-inline-nav" role="group" aria-label="用語移動"><button class="secondary" data-note-move="-1" data-note-move-term="${esc(term.id)}" type="button">↑ 前へ</button><button class="secondary" data-note-move="1" data-note-move-term="${esc(term.id)}" type="button">↓ 次へ</button></div></div><p class="knowledge-note-question">${esc(knowledgeWritingQuestion(term,svc))}</p><div class="memorization-note-wrap" data-memorization-term="${esc(term.id)}"><textarea class="knowledge-note-area" data-map-note-term="${esc(term.id)}" placeholder="定義・仕組み・FEで重要な点を、自分の言葉で書いてください">${esc(readKnowledgeTermNote(term))}</textarea><div class="memorization-cover" data-memorization-cover="${esc(term.id)}" aria-hidden="true"><strong>あなたの記述は隠れています</strong><span>端末を傾ける、または「現在の答えを見る」を長押ししてください。</span></div></div><p class="help" data-map-note-status>目安: 1〜3文。完璧でなくても保存できます。後でChatGPTにまとめて確認できます。</p>${renderMemorizationRatingSection(term)}<div class="note-review-grid"><label>ChatGPT確認結果<select data-note-review-term="${esc(term.id)}">${noteReviewOption('unreviewed','未確認',review)}${noteReviewOption('correct','正しい',review)}${noteReviewOption('needs_fix','一部修正が必要',review)}${noteReviewOption('insufficient','理解不足',review)}</select></label><label>修正メモ<textarea class="feedback-note-area" data-note-feedback-term="${esc(term.id)}" placeholder="ChatGPTの指摘や直すポイントを書く">${esc(record.feedbackMemo||'')}</textarea></label></div></section>`;
 }
 function renderKnowledgeInlineDetail(term,svc){
   const progress=svc.progressForTerm(term.id),writing=writingProgressForTerm(term),test=testProgressForTerm(term,svc),prereq=svc.getPrerequisites(term.id),connected=svc.getConnectedTerms(term.id).filter(x=>!prereq.some(p=>p.id===x.id)),reasons=svc.weakReasons(term.id);
@@ -419,6 +443,7 @@ function bindKnowledgeMapActions(){
   updateInlineNoteNavButtons();
   $$('[data-note-review-term]').forEach(select=>bindKnowledgeReviewSelect(select));
   $$('[data-note-feedback-term]').forEach(area=>bindKnowledgeFeedbackArea(area));
+  $$('[data-memorization-rating-term]').forEach(button=>bindMemorizationRatingButton(button));
   observeMemorizationTerms();
   applyMemorizationCovers();
 }
@@ -435,6 +460,7 @@ function renderKnowledgeDetail(termId){
   updateInlineNoteNavButtons();
   $$('#knowledgeDetailPanel [data-note-review-term]').forEach(select=>bindKnowledgeReviewSelect(select));
   $$('#knowledgeDetailPanel [data-note-feedback-term]').forEach(area=>bindKnowledgeFeedbackArea(area));
+  $$('#knowledgeDetailPanel [data-memorization-rating-term]').forEach(button=>bindMemorizationRatingButton(button));
   observeMemorizationTerms();
   applyMemorizationCovers();
 }
@@ -673,6 +699,34 @@ function bindKnowledgeFeedbackArea(area){
   const termId=area.dataset.noteFeedbackTerm,setStatus=()=>{const section=area.closest('.knowledge-note-section'),status=section?.querySelector('[data-map-note-status]');if(status)status.textContent='修正メモを保存しました';};
   area.oninput=()=>{clearTimeout(knowledgeFeedbackSaveTimer);knowledgeFeedbackSaveTimer=setTimeout(()=>{saveKnowledgeReview(termId,{feedback:area.value});setStatus();},700);};
   area.onblur=()=>{clearTimeout(knowledgeFeedbackSaveTimer);saveKnowledgeReview(termId,{feedback:area.value});setStatus();};
+}
+function bindMemorizationRatingButton(button){
+  button.onclick=()=>saveMemorizationRating(button.dataset.memorizationRatingTerm,button.dataset.memorizationRating);
+}
+function addMemorizationReviewCandidate(term,rating){
+  if(!term?.appTermId||rating==='known')return;
+  const target=rating==='unknown'?localDate():addDays(localDate(),1),s=getTermState(term.appTermId),reason=rating==='unknown'?'暗記で覚えていなかった':'暗記であいまい';
+  if(!reviewDate(s)||reviewDate(s)>target){s.due=target;s.nextReview=target;}
+  s.mastery=Math.max(Number(s.mastery)||0,1);
+  s.last=s.last||localDate();
+  s.updatedAt=localDate();
+  s.weakReasons=unique([...(Array.isArray(s.weakReasons)?s.weakReasons:[]),reason]);
+  const appTerm=term.appTerm||termById.get(String(term.appTermId));
+  if(appTerm)s.reviewPriority=reviewPriority(appTerm);
+}
+function saveMemorizationRating(termId,rating){
+  if(!['known','unsure','unknown'].includes(rating))return;
+  const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term)return;
+  const record=getMemorizationRatingRecord(term.id,true),now=new Date().toISOString();
+  record.lastRating=rating;
+  record.ratedAt=now;
+  if(rating==='known')record.knownCount++;
+  if(rating==='unsure')record.unsureCount++;
+  if(rating==='unknown')record.unknownCount++;
+  addMemorizationReviewCandidate(term,rating);
+  saveState(false);
+  showToast(`${memorizationRatingLabel(rating)}を保存しました`);
+  if(currentView==='map'){renderKnowledgeMap();renderKnowledgeDetail(term.id);}
 }
 function handleKnowledgeCompositionStart(e){if(e.target?.matches?.('.knowledge-note-area')){knowledgeNoteComposing=true;knowledgeCompositionBlockUntil=Date.now()+800;}}
 function handleKnowledgeCompositionEnd(e){if(e.target?.matches?.('.knowledge-note-area')){knowledgeNoteComposing=false;knowledgeCompositionBlockUntil=Date.now()+300;}}
