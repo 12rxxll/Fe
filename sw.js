@@ -1,9 +1,9 @@
-const CACHE = 'fe-learning-os-v2-20260801-quiz-related-v20';
+const CACHE = 'fe-learning-os-v2-20260801-detail-card-v21';
 const ASSET_PATHS = [
   './',
   './index.html',
-  './assets/styles.css?v=2.1.2',
-  './assets/app.js?v=2.1.2',
+  './assets/styles.css?v=2.1.3',
+  './assets/app.js?v=2.1.3',
   './assets/terms-data.js',
   './assets/syllabus-terms.js',
   './assets/subject-a-data.js',

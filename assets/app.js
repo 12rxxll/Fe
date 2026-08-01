@@ -7,7 +7,7 @@ const KNOWLEDGE_TERMS = knowledgeMapTermsToGlossary(KMAP_DATA);
 const TERMS = mergeTerms(CORE_TERMS, SYLLABUS_TERMS, KNOWLEDGE_TERMS);
 const SUBJECT_A = Array.isArray(window.FE_SUBJECT_A_QUESTIONS) ? window.FE_SUBJECT_A_QUESTIONS : [];
 const STORAGE_KEY = 'fe-learning-os-v2';
-const DATA_SCHEMA = 11;
+const DATA_SCHEMA = 12;
 const DAY = 86400000;
 const NOTE_MIN_CHARS = 10;
 const NOTE_BATCH_MAX_TERMS = 20;
@@ -23,7 +23,7 @@ const MEMORIZATION_DEFAULTS = {
   panelVisible:true
 };
 const defaultMemorizationSettings = () => Object.assign({}, MEMORIZATION_DEFAULTS);
-const defaultUiState = () => ({quizSetup:{source:'terms',mode:'recommended',system:'',length:'10',type:'mixed'},map:{scrollY:0,selectedTermId:'',mapMode:'overview',expandedRelatedTermIds:[]}});
+const defaultUiState = () => ({quizSetup:{source:'terms',mode:'recommended',system:'',length:'10',type:'mixed'},map:{scrollY:0,selectedTermId:'',mapMode:'overview',expandedRelatedTermIds:[],openDetailAccordions:[]}});
 const defaultState = () => ({version:2,schemaVersion:DATA_SCHEMA,createdAt:new Date().toISOString(),settings:{dailyGoal:10,examDate:'',theme:'system',memorization:defaultMemorizationSettings()},terms:{},knowledgeNotes:{},termNotes:{},memorizationRatings:{},quizDraft:null,uiState:defaultUiState(),chatgptSubmissionBatches:[],attempts:[],sessions:[],subjectA:{questions:{},attempts:[],sessions:[]}});
 let needsMigrationSave = false;
 let state = loadState();
@@ -72,6 +72,7 @@ const memorizationRuntime = {
 const knowledgeExpandedCategories = new Set();
 const knowledgeCategoryLimits = new Map();
 const knowledgeExpandedRelatedTerms = new Set();
+const knowledgeDetailAccordionOpen = new Set();
 let knowledgeHighlightTimer = null;
 let highlightedKnowledgeTermId = '';
 const termById = new Map(TERMS.map(t => [String(t.id), t]));
@@ -184,7 +185,8 @@ function migrateUiState(value={}){
       scrollY:Math.max(0,Number(map.scrollY)||0),
       selectedTermId:String(map.selectedTermId||''),
       mapMode:map.mapMode==='tree'?'tree':'overview',
-      expandedRelatedTermIds:Array.isArray(map.expandedRelatedTermIds)?map.expandedRelatedTermIds.map(String).slice(0,80):[]
+      expandedRelatedTermIds:Array.isArray(map.expandedRelatedTermIds)?map.expandedRelatedTermIds.map(String).slice(0,80):[],
+      openDetailAccordions:Array.isArray(map.openDetailAccordions)?map.openDetailAccordions.map(String).filter(key=>['info','memory','review'].includes(key)):defaults.map.openDetailAccordions.slice()
     }
   };
 }
@@ -301,6 +303,7 @@ function saveKnowledgeUiState({save=false}={}){
   map.selectedTermId=selectedKnowledgeTermId||'';
   map.mapMode=knowledgeMapMode||'overview';
   map.expandedRelatedTermIds=[...knowledgeExpandedRelatedTerms].slice(0,80);
+  map.openDetailAccordions=[...knowledgeDetailAccordionOpen].filter(key=>['info','memory','review'].includes(key));
   if(save)saveState(false);
 }
 function queueKnowledgeUiStateSave(){
@@ -314,6 +317,8 @@ function applyKnowledgeUiState(){
   selectedKnowledgeTermId=map.selectedTermId||selectedKnowledgeTermId;
   knowledgeExpandedRelatedTerms.clear();
   map.expandedRelatedTermIds.forEach(id=>knowledgeExpandedRelatedTerms.add(id));
+  knowledgeDetailAccordionOpen.clear();
+  map.openDetailAccordions.forEach(key=>knowledgeDetailAccordionOpen.add(key));
   if(selectedKnowledgeTermId){const svc=getKnowledgeService(),term=svc?.getTerm(selectedKnowledgeTermId);if(term)expandKnowledgeCategoryPath(term.categoryId,svc);}
 }
 function restoreKnowledgeScroll(){
@@ -530,8 +535,7 @@ function renderMemorizationRatingSection(term){
   return `<div class="memorization-rating" data-memorization-rating-panel="${esc(term.id)}"><div><strong>暗記自己評価</strong><small>テスト正答率とは別に保存します。最終: ${esc(last)} / ${esc(lastDate)}</small></div><div class="memorization-rating-actions" role="group" aria-label="${esc(term.name)}の暗記自己評価">${['known','unsure','unknown'].map(value=>`<button class="secondary ${record.lastRating===value?'active':''}" data-memorization-rating-term="${esc(term.id)}" data-memorization-rating="${value}" type="button">${esc(memorizationRatingLabel(value))}</button>`).join('')}</div><small class="subtle">累計: 覚えていた ${record.knownCount} / あいまい ${record.unsureCount} / 覚えていなかった ${record.unknownCount}</small></div>`;
 }
 function renderKnowledgeNoteSection(term,svc,heading='h5'){
-  const record=getTermNoteRecord(term,false),review=record.reviewStatus||'unreviewed';
-  return `<section class="map-detail-section knowledge-note-section"><div class="note-section-head"><${heading}>自分の言葉でまとめる</${heading}><div class="note-inline-nav" role="group" aria-label="用語移動"><button class="secondary" data-note-move="-1" data-note-move-term="${esc(term.id)}" type="button">↑ 前へ</button><button class="secondary" data-note-move="1" data-note-move-term="${esc(term.id)}" type="button">↓ 次へ</button></div></div><p class="knowledge-note-question">${esc(knowledgeWritingQuestion(term,svc))}</p><div class="memorization-note-wrap" data-memorization-term="${esc(term.id)}"><textarea class="knowledge-note-area" data-map-note-term="${esc(term.id)}" placeholder="定義・仕組み・FEで重要な点を、自分の言葉で書いてください">${esc(readKnowledgeTermNote(term))}</textarea><div class="memorization-cover" data-memorization-cover="${esc(term.id)}" aria-hidden="true"><strong>あなたの記述は隠れています</strong><span>端末を傾ける、または「現在の答えを見る」を長押ししてください。</span></div></div><p class="help" data-map-note-status>目安: 1〜3文。完璧でなくても保存できます。後でChatGPTにまとめて確認できます。</p>${renderMemorizationRatingSection(term)}<div class="note-review-grid"><label>ChatGPT確認結果<select data-note-review-term="${esc(term.id)}">${noteReviewOption('unreviewed','未確認',review)}${noteReviewOption('correct','正しい',review)}${noteReviewOption('needs_fix','一部修正が必要',review)}${noteReviewOption('insufficient','理解不足',review)}</select></label><label>修正メモ<textarea class="feedback-note-area" data-note-feedback-term="${esc(term.id)}" placeholder="ChatGPTの指摘や直すポイントを書く">${esc(record.feedbackMemo||'')}</textarea></label></div></section>`;
+  return `<section class="map-detail-section knowledge-note-section"><div class="note-section-head"><${heading}>自分の言葉でまとめる</${heading}><div class="note-inline-nav" role="group" aria-label="用語移動"><button class="secondary" data-note-move="-1" data-note-move-term="${esc(term.id)}" type="button">前の用語</button><button class="secondary" data-note-move="1" data-note-move-term="${esc(term.id)}" type="button">次の用語</button></div></div><p class="knowledge-note-question">${esc(knowledgeWritingQuestion(term,svc))}</p><div class="memorization-note-wrap" data-memorization-term="${esc(term.id)}"><textarea class="knowledge-note-area" data-map-note-term="${esc(term.id)}" placeholder="定義・仕組み・FEで重要な点を、自分の言葉で書いてください">${esc(readKnowledgeTermNote(term))}</textarea><div class="memorization-cover" data-memorization-cover="${esc(term.id)}" aria-hidden="true"><strong>あなたの記述は隠れています</strong><span>「暗記・ChatGPT確認」内のボタン、またはセンサ操作で表示します。</span></div></div><p class="help" data-map-note-status>自動保存: 入力すると保存します。</p></section>`;
 }
 function splitRelatedNames(value){return String(value||'').split(/[\/、,，]/).map(name=>name.trim()).filter(Boolean);}
 function mapTermByName(svc,name){const key=normalize(name);return svc.terms.find(term=>normalize(term.name)===key)||null;}
@@ -559,9 +563,35 @@ function renderRelatedAccordion(term,svc,heading='h5'){
   if(!open)return '';
   return `<section class="map-detail-section related-accordion" data-related-panel="${esc(term.id)}"><${heading}>関連用語</${heading}><div class="related-term-list" aria-label="${esc(term.name)}の関連用語">${entries.length?entries.map(entry=>relatedEntryHtml(entry,svc)).join(''):'<p class="empty compact">関連用語は登録されていません</p>'}</div></section>`;
 }
+function renderKnowledgeDetailAccordion(key,title,bodyHtml,scope){
+  const open=knowledgeDetailAccordionOpen.has(key),panelId=`knowledge-${scope}-${key}-accordion`;
+  return `<section class="knowledge-detail-accordion ${open?'is-open':''}"><button class="knowledge-detail-accordion-toggle" data-knowledge-detail-accordion="${esc(key)}" type="button" aria-expanded="${open?'true':'false'}" aria-controls="${esc(panelId)}"><span>${esc(title)}</span><b aria-hidden="true">${open?'−':'+'}</b></button><div id="${esc(panelId)}" class="knowledge-detail-accordion-body" ${open?'':'hidden'}>${bodyHtml}</div></section>`;
+}
+function renderKnowledgeInfoAccordion(term,svc,scope){
+  const progress=svc.progressForTerm(term.id),writing=writingProgressForTerm(term),test=testProgressForTerm(term,svc),prereq=svc.getPrerequisites(term.id),reasons=svc.weakReasons(term.id),entries=relatedEntriesForTerm(term,svc,18);
+  const body=`<div class="knowledge-accordion-grid"><div class="knowledge-detail-field"><strong>詳しい説明</strong><p>${esc(term.detailedDescription||term.shortDescription||'説明は未登録です。')}</p>${term.example?`<p class="help"><b>具体例:</b> ${esc(term.example)}</p>`:''}</div><div class="knowledge-detail-field"><strong>進捗</strong><div class="progress-split compact"><div><span>記述</span><div class="progress-track"><span style="width:${writing.score}%"></span></div><small>${esc(writing.label)}</small></div><div><span>テスト</span><div class="progress-track"><span style="width:${test.score}%"></span></div><small>${esc(test.summary)}</small></div></div><div class="badges compact"><span class="badge ${esc(writing.className)}">記述: ${esc(writing.label)}</span><span class="badge ${esc(test.className)}">テスト: ${esc(test.label)}</span><span class="badge gray">正解 ${formatProgressCount(progress.correctAttempts)}</span><span class="badge gray">誤答 ${formatProgressCount(progress.wrongAttempts)}</span></div></div><div class="knowledge-mini-stats"><span><strong>重要度</strong><b>${esc(term.importance)}/5</b></span><span><strong>難易度</strong><b>${esc(term.difficulty)}/5</b></span></div><div class="knowledge-detail-field"><strong>前提用語</strong><div class="map-relation-list">${prereq.length?prereq.slice(0,10).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">前提はありません。</span>'}</div></div><div class="knowledge-detail-field"><strong>関連用語</strong><div class="related-term-list">${entries.length?entries.map(entry=>relatedEntryHtml(entry,svc)).join(''):'<p class="empty compact">関連用語は登録されていません。</p>'}</div></div><div class="knowledge-detail-field"><strong>苦手理由</strong><p class="help">${reasons.length?esc(reasons.join('、')):'現在は明確な苦手理由はありません。'}</p></div></div>`;
+  return renderKnowledgeDetailAccordion('info','説明・関連情報',body,scope);
+}
+function memorizationRevealButtonText(termId=''){
+  const settings=memorizationSettings();
+  if(settings.manualMode==='tap'&&memorizationRuntime.manualToggleTermId===termId)return '答えを隠す';
+  return settings.manualMode==='hold'?'長押しで答えを見る':'現在の答えを見る';
+}
+function renderKnowledgeMemoryAccordion(term,svc,scope){
+  const settings=memorizationSettings(),record=getTermNoteRecord(term,false),review=record.reviewStatus||'unreviewed';
+  const body=`<div class="knowledge-accordion-grid"><div class="knowledge-memory-controls"><label class="checkbox-row knowledge-check-row"><input data-detail-memorization-mode type="checkbox" ${memorizationRuntime.enabled?'checked':''}><span><strong>暗記モード</strong><small>記述欄を隠して思い出す練習をします。</small></span></label><label class="checkbox-row knowledge-check-row"><input data-detail-memorization-sensor type="checkbox" ${settings.sensorEnabled?'checked':''} ${memorizationRuntime.enabled?'':'disabled'}><span><strong>センサ操作</strong><small>端末の傾きで現在の答えを表示します。</small></span></label><div class="knowledge-memory-actions"><button class="primary" data-detail-memorization-reveal data-detail-memorization-term="${esc(term.id)}" type="button" ${memorizationRuntime.enabled?'':'disabled'}>${esc(memorizationRevealButtonText(term.id))}</button><button class="secondary" data-detail-memorization-recalibrate type="button" ${memorizationRuntime.enabled&&settings.sensorEnabled?'':'disabled'}>センサ再調整</button><button class="secondary" data-map-chatgpt-term="${esc(term.id)}" type="button">ChatGPTへ送る</button></div><p class="help" data-detail-memorization-status>${esc(memorizationRuntime.enabled?`${memorizationDecisionText()}。${memorizationRuntime.sensorMessage}`:'暗記モードはOFFです。')}</p></div><div class="note-review-grid"><label>ChatGPT確認結果<select data-note-review-term="${esc(term.id)}">${noteReviewOption('unreviewed','未確認',review)}${noteReviewOption('correct','正しい',review)}${noteReviewOption('needs_fix','一部修正が必要',review)}${noteReviewOption('insufficient','理解不足',review)}</select></label><label>修正メモ<textarea class="feedback-note-area" data-note-feedback-term="${esc(term.id)}" placeholder="ChatGPTの指摘や直すポイントを書く">${esc(record.feedbackMemo||'')}</textarea></label></div></div>`;
+  return renderKnowledgeDetailAccordion('memory','暗記・ChatGPT確認',body,scope);
+}
+function renderKnowledgeReviewAccordion(term,svc,scope){
+  const progress=svc.progressForTerm(term.id),test=testProgressForTerm(term,svc),nextReview=progress.nextReviewAt?formatReviewDate(progress.nextReviewAt):'未設定';
+  const body=`<div class="knowledge-accordion-grid">${renderMemorizationRatingSection(term)}<div class="knowledge-review-grid"><div class="knowledge-review-item"><strong>問題演習</strong><button class="primary" data-map-practice-term="${esc(term.id)}" type="button" ${term.appTermId?'':'disabled'}>確認問題を解く</button></div><div class="knowledge-review-item"><strong>テスト結果</strong><span>${esc(test.summary)}</span><small>正解 ${formatProgressCount(progress.correctAttempts)} / 誤答 ${formatProgressCount(progress.wrongAttempts)}</small></div><div class="knowledge-review-item"><strong>次回復習日</strong><span>${esc(nextReview)}</span></div></div></div>`;
+  return renderKnowledgeDetailAccordion('review','復習・問題',body,scope);
+}
+function renderKnowledgeDetailContent(term,svc,heading='h5',scope='inline'){
+  return `${renderKnowledgeNoteSection(term,svc,heading)}<div class="knowledge-detail-accordion-list">${renderKnowledgeInfoAccordion(term,svc,scope)}${renderKnowledgeMemoryAccordion(term,svc,scope)}${renderKnowledgeReviewAccordion(term,svc,scope)}</div>`;
+}
 function renderKnowledgeInlineDetail(term,svc){
-  const progress=svc.progressForTerm(term.id),writing=writingProgressForTerm(term),test=testProgressForTerm(term,svc),prereq=svc.getPrerequisites(term.id),reasons=svc.weakReasons(term.id);
-  return `<article class="knowledge-inline-detail" data-map-inline-detail="${esc(term.id)}" aria-label="${esc(term.name)}の詳細"><div class="knowledge-inline-head"><div><h4>${esc(term.name)}</h4><p class="lead-copy">${esc(term.shortDescription)}</p></div><button class="knowledge-inline-close" data-map-collapse-detail type="button" aria-label="詳細を閉じる"><span aria-hidden="true">×</span></button></div><div class="progress-split"><div><span>記述</span><div class="progress-track"><span style="width:${writing.score}%"></span></div><small>${esc(writing.label)}</small></div><div><span>テスト</span><div class="progress-track"><span style="width:${test.score}%"></span></div><small>${esc(test.summary)}</small></div></div><div class="badges"><span class="badge ${esc(writing.className)}">記述: ${esc(writing.label)}</span><span class="badge ${esc(test.className)}">テスト: ${esc(test.label)}</span><span class="badge gray">重要度 ${term.importance}</span><span class="badge gray">難易度 ${term.difficulty}</span>${progress.nextReviewAt?`<span class="badge ${progress.nextReviewAt<=localDate()?'bad':'gray'}">次回 ${esc(formatReviewDate(progress.nextReviewAt))}</span>`:''}</div><section class="map-detail-section"><h5>詳しい説明</h5><p>${esc(term.detailedDescription)}</p>${term.example?`<p class="help"><b>具体例:</b> ${esc(term.example)}</p>`:''}</section><section class="map-detail-section"><h5>前提用語</h5><div class="map-relation-list">${prereq.length?prereq.slice(0,8).map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">前提はありません。</span>'}</div></section>${reasons.length?`<section class="map-detail-section"><h5>苦手理由</h5><p class="help">${esc(reasons.join('、'))}</p></section>`:''}<div class="knowledge-inline-actions single"><button class="secondary" data-map-chatgpt-term="${esc(term.id)}" type="button">ChatGPT</button></div>${renderKnowledgeNoteSection(term,svc,'h5')}<div class="knowledge-inline-actions"><button class="primary" data-map-practice-term="${esc(term.id)}" type="button" ${term.appTermId?'':'disabled'}>問題</button><button class="secondary" data-map-related-toggle="${esc(term.id)}" type="button" aria-expanded="${knowledgeExpandedRelatedTerms.has(term.id)?'true':'false'}">関連用語 ${knowledgeExpandedRelatedTerms.has(term.id)?'▲':'▼'}</button></div>${renderRelatedAccordion(term,svc,'h5')}<p class="help">ChatGPTボタンは質問文をコピーしてChatGPTを開きます。APIキーや詳しい学習履歴は使いません。</p></article>`;
+  return `<article class="knowledge-inline-detail" data-knowledge-detail-root data-map-inline-detail="${esc(term.id)}" aria-label="${esc(term.name)}の記述カード">${renderKnowledgeDetailContent(term,svc,'h5','inline')}</article>`;
 }
 function renderKnowledgeOverview(svc,summary){
   const panel=$('knowledgeOverviewPanel');
@@ -573,7 +603,7 @@ function renderKnowledgeOverview(svc,summary){
   panel.innerHTML=`<div class="overview-head"><div><p class="eyebrow">Overview</p><h3>全体図</h3><p class="help">基本情報技術者の用語を、分野と大分類ごとの進み具合で整理しています。</p></div><strong>${summary.termCount}語</strong></div><div class="knowledge-overview-grid">${subjects.map(subject=>{const p=svc.subjectProgress(subject.id),c=p.statusCounts;return `<article class="overview-card"><span>${esc(subject.name)}</span><strong>${p.masteryScore}%</strong><div class="progress-track"><span style="width:${p.masteryScore}%"></span></div><small>${p.termCount}語・未学習 ${c.unlearned}・苦手 ${c.weak}・習得 ${c.mastered}</small></article>`;}).join('')}</div><div class="overview-subject-list">${tree.map(node=>{const subjectProgress=svc.subjectProgress(node.subject.id);return `<section class="overview-subject-section"><div class="overview-subject-heading"><div><h3>${esc(node.subject.name)}</h3><small>${subjectProgress.termCount}語・平均 ${subjectProgress.masteryScore}%</small></div><b>${subjectProgress.masteryScore}%</b></div><div class="overview-category-grid">${node.categories.map(category=>{const p=svc.categoryProgress(category.id),c=p.statusCounts;return `<button class="overview-category text-button" data-map-overview-category="${esc(category.id)}" type="button"><span><strong>${esc(category.name)}</strong><small>${p.termCount}語・要復習 ${c.review}・苦手 ${c.weak}</small></span><b>${p.masteryScore}%</b></button>`;}).join('')}</div></section>`;}).join('')}</div>`;
 }
 function knowledgeHistorySnapshot(){
-  return {view:currentView,scrollY:window.scrollY||0,selectedTermId:selectedKnowledgeTermId,mapMode:knowledgeMapMode,expandedRelatedTermIds:[...knowledgeExpandedRelatedTerms]};
+  return {view:currentView,scrollY:window.scrollY||0,selectedTermId:selectedKnowledgeTermId,mapMode:knowledgeMapMode,expandedRelatedTermIds:[...knowledgeExpandedRelatedTerms],openDetailAccordions:[...knowledgeDetailAccordionOpen]};
 }
 function restoreKnowledgeSnapshot(snapshot){
   if(!snapshot||typeof snapshot!=='object')return false;
@@ -582,6 +612,8 @@ function restoreKnowledgeSnapshot(snapshot){
   knowledgeMapMode=snapshot.mapMode||'tree';
   knowledgeExpandedRelatedTerms.clear();
   (Array.isArray(snapshot.expandedRelatedTermIds)?snapshot.expandedRelatedTermIds:[]).forEach(id=>knowledgeExpandedRelatedTerms.add(String(id)));
+  knowledgeDetailAccordionOpen.clear();
+  (Array.isArray(snapshot.openDetailAccordions)?snapshot.openDetailAccordions:[]).filter(key=>['info','memory','review'].includes(String(key))).forEach(key=>knowledgeDetailAccordionOpen.add(String(key)));
   if(selectedKnowledgeTermId){const svc=getKnowledgeService(),term=svc?.getTerm(selectedKnowledgeTermId);if(term)expandKnowledgeCategoryPath(term.categoryId,svc);}
   syncNavigationState();
   renderAll();
@@ -651,6 +683,32 @@ function toggleRelatedTerms(termId){
   if(selectedKnowledgeTermId)renderKnowledgeDetail(selectedKnowledgeTermId);
   saveKnowledgeUiState({save:true});
 }
+function toggleKnowledgeDetailAccordion(key){
+  key=String(key||'');
+  if(!['info','memory','review'].includes(key))return;
+  if(knowledgeDetailAccordionOpen.has(key))knowledgeDetailAccordionOpen.delete(key);else knowledgeDetailAccordionOpen.add(key);
+  renderKnowledgeMap();
+  if(selectedKnowledgeTermId)renderKnowledgeDetail(selectedKnowledgeTermId);
+  saveKnowledgeUiState({save:true});
+}
+function bindDetailMemorizationRevealButton(button){
+  button.onpointerdown=event=>{
+    if(memorizationSettings().manualMode!=='hold'||!memorizationRuntime.enabled)return;
+    event.preventDefault();
+    button.setPointerCapture?.(event.pointerId);
+    startManualMemorizationReveal();
+  };
+  const stop=event=>{
+    if(memorizationSettings().manualMode!=='hold')return;
+    event.preventDefault();
+    stopManualMemorizationReveal();
+  };
+  button.onpointerup=stop;
+  button.onpointercancel=stop;
+  button.onpointerleave=stop;
+  button.onclick=()=>{if(memorizationSettings().manualMode==='tap')toggleManualMemorizationReveal();};
+  button.oncontextmenu=event=>event.preventDefault();
+}
 function bindKnowledgeMapActions(){
   $$('[data-map-term-id]').forEach(button=>{button.onclick=()=>selectKnowledgeTerm(button.dataset.mapTermId);});
   $$('[data-map-category-id]').forEach(button=>button.onclick=()=>{const id=button.dataset.mapCategoryId;if(knowledgeExpandedCategories.has(id))knowledgeExpandedCategories.delete(id);else knowledgeExpandedCategories.add(id);renderKnowledgeMap();});
@@ -661,6 +719,11 @@ function bindKnowledgeMapActions(){
   $$('[data-map-related-toggle]').forEach(button=>button.onclick=()=>toggleRelatedTerms(button.dataset.mapRelatedToggle));
   $$('[data-map-related-jump]').forEach(button=>button.onclick=()=>jumpToRelatedKnowledgeTerm(button.dataset.mapRelatedJump));
   $$('[data-map-chatgpt-term]').forEach(button=>button.onclick=()=>openKnowledgeTermChatGPT(button.dataset.mapChatgptTerm));
+  $$('[data-knowledge-detail-accordion]').forEach(button=>button.onclick=()=>toggleKnowledgeDetailAccordion(button.dataset.knowledgeDetailAccordion));
+  $$('[data-detail-memorization-mode]').forEach(input=>input.onchange=()=>setMemorizationMode(input.checked,{persist:true,userGesture:true}));
+  $$('[data-detail-memorization-sensor]').forEach(input=>input.onchange=()=>setMemorizationSensor(input.checked,{persist:true,userGesture:true}));
+  $$('[data-detail-memorization-reveal]').forEach(button=>bindDetailMemorizationRevealButton(button));
+  $$('[data-detail-memorization-recalibrate]').forEach(button=>button.onclick=()=>recalibrateMemorizationSensor(true));
   $$('[data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
   $$('[data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
   updateInlineNoteNavButtons();
@@ -672,12 +735,16 @@ function bindKnowledgeMapActions(){
 }
 function renderKnowledgeDetail(termId){
   const svc=getKnowledgeService(),term=svc?.getTerm(termId);if(!term)return;
-  const progress=svc.progressForTerm(term.id),writing=writingProgressForTerm(term),test=testProgressForTerm(term,svc),prereq=svc.getPrerequisites(term.id),reasons=svc.weakReasons(term.id),relations=svc.getRelations(term.id),relatedOpen=knowledgeExpandedRelatedTerms.has(term.id);
-  $('knowledgeDetailPanel').innerHTML=`<div class="map-detail-head"><div><p class="eyebrow">${esc((term.appTerm||{})['系']||'テクノロジ系')} / ${esc((term.appTerm||{})['中分類']||'知識マップ')}</p><h3>${esc(term.name)}</h3><p class="subtle">記述 ${esc(writing.label)}・テスト ${esc(test.label)}・重要度${term.importance}・難易度${term.difficulty}</p></div><div class="map-detail-score"><strong>${progress.masteryScore}%</strong><small>テスト習熟</small></div></div><div class="progress-split"><div><span>記述</span><div class="progress-track"><span style="width:${writing.score}%"></span></div><small>${esc(writing.label)}</small></div><div><span>テスト</span><div class="progress-track"><span style="width:${test.score}%"></span></div><small>${esc(test.summary)}</small></div></div><div class="badges"><span class="badge ${esc(writing.className)}">記述: ${esc(writing.label)}</span><span class="badge ${esc(test.className)}">テスト: ${esc(test.label)}</span><span class="badge gray">正解 ${formatProgressCount(progress.correctAttempts)}</span><span class="badge gray">誤答 ${formatProgressCount(progress.wrongAttempts)}</span>${progress.nextReviewAt?`<span class="badge ${progress.nextReviewAt<=localDate()?'bad':'gray'}">次回 ${esc(formatReviewDate(progress.nextReviewAt))}</span>`:''}</div><section class="map-detail-section"><h4>短い説明</h4><p class="lead-copy">${esc(term.shortDescription)}</p></section><section class="map-detail-section"><h4>詳しい説明</h4><p>${esc(term.detailedDescription)}</p><p class="help"><b>具体例:</b> ${esc(term.example)}</p></section>${renderKnowledgeNoteSection(term,svc,'h4')}<section class="map-detail-section"><h4>前提用語</h4><div class="map-relation-list">${prereq.length?prereq.map(x=>relationTermButton(x,svc)).join(''):'<span class="subtle">前提はありません。</span>'}</div></section><section class="map-detail-section"><h4>苦手理由</h4><p class="help">${reasons.length?esc(reasons.join('、')):'現在は明確な苦手理由はありません。'}</p></section><section class="map-detail-section"><h4>関係タイプ</h4><div class="badges">${relations.length?relations.map(r=>`<span class="badge gray">${esc(relationLabels[r.relationType]||r.relationType)}: ${esc(svc.getTerm(r.targetTermId)?.name||r.targetTermId)}</span>`).join(''):'<span class="badge gray">登録なし</span>'}</div></section><div class="dialog-actions"><button id="mapChatGPTButton" class="secondary" type="button">ChatGPTに聞く</button><button id="mapPracticeButton" class="primary" type="button" ${term.appTermId?'':'disabled'}>確認問題を解く</button><button id="mapRelatedToggleButton" class="secondary" type="button" aria-expanded="${relatedOpen?'true':'false'}">関連用語 ${relatedOpen?'▲':'▼'}</button></div>${renderRelatedAccordion(term,svc,'h4')}`;
+  const panel=$('knowledgeDetailPanel');if(!panel)return;
+  panel.innerHTML=`<div class="knowledge-detail-card" data-knowledge-detail-root aria-label="${esc(term.name)}の記述カード">${renderKnowledgeDetailContent(term,svc,'h4','panel')}</div>`;
   $$('#knowledgeDetailPanel [data-map-related-jump]').forEach(button=>button.onclick=()=>jumpToRelatedKnowledgeTerm(button.dataset.mapRelatedJump));
-  $('mapPracticeButton').onclick=()=>startKnowledgeTermPractice(term.id,false);
-  $('mapRelatedToggleButton').onclick=()=>toggleRelatedTerms(term.id);
-  $('mapChatGPTButton').onclick=()=>openKnowledgeTermChatGPT(term.id);
+  $$('#knowledgeDetailPanel [data-map-practice-term]').forEach(button=>button.onclick=()=>startKnowledgeTermPractice(button.dataset.mapPracticeTerm,false));
+  $$('#knowledgeDetailPanel [data-map-chatgpt-term]').forEach(button=>button.onclick=()=>openKnowledgeTermChatGPT(button.dataset.mapChatgptTerm));
+  $$('#knowledgeDetailPanel [data-knowledge-detail-accordion]').forEach(button=>button.onclick=()=>toggleKnowledgeDetailAccordion(button.dataset.knowledgeDetailAccordion));
+  $$('#knowledgeDetailPanel [data-detail-memorization-mode]').forEach(input=>input.onchange=()=>setMemorizationMode(input.checked,{persist:true,userGesture:true}));
+  $$('#knowledgeDetailPanel [data-detail-memorization-sensor]').forEach(input=>input.onchange=()=>setMemorizationSensor(input.checked,{persist:true,userGesture:true}));
+  $$('#knowledgeDetailPanel [data-detail-memorization-reveal]').forEach(button=>bindDetailMemorizationRevealButton(button));
+  $$('#knowledgeDetailPanel [data-detail-memorization-recalibrate]').forEach(button=>button.onclick=()=>recalibrateMemorizationSensor(true));
   $$('#knowledgeDetailPanel [data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
   $$('#knowledgeDetailPanel [data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
   updateInlineNoteNavButtons();
@@ -919,7 +986,7 @@ function bindKnowledgeReviewSelect(select){
   select.onchange=()=>{saveKnowledgeReview(termId,{status:select.value,rerender:true});showToast('確認結果を保存しました');};
 }
 function bindKnowledgeFeedbackArea(area){
-  const termId=area.dataset.noteFeedbackTerm,setStatus=()=>{const section=area.closest('.knowledge-note-section'),status=section?.querySelector('[data-map-note-status]');if(status)status.textContent='修正メモを保存しました';};
+  const termId=area.dataset.noteFeedbackTerm,setStatus=()=>{const root=area.closest('[data-knowledge-detail-root]')||area.closest('.knowledge-note-section'),status=root?.querySelector('[data-map-note-status]');if(status)status.textContent='修正メモを保存しました';};
   area.oninput=()=>{clearTimeout(knowledgeFeedbackSaveTimer);knowledgeFeedbackSaveTimer=setTimeout(()=>{saveKnowledgeReview(termId,{feedback:area.value});setStatus();},700);};
   area.onblur=()=>{clearTimeout(knowledgeFeedbackSaveTimer);saveKnowledgeReview(termId,{feedback:area.value});setStatus();};
 }
@@ -1342,6 +1409,11 @@ function renderMemorizationPanel(){
   if(reveal){reveal.disabled=!memorizationRuntime.enabled||!target;reveal.textContent=settings.manualMode==='tap'&&memorizationRuntime.manualToggleTermId?'答えを隠す':(settings.manualMode==='hold'?'長押しで答えを見る':'現在の答えを見る');}
   if(all){all.disabled=!memorizationRuntime.enabled;all.textContent=memorizationRuntime.allVisible?'すべて隠す':'すべて表示';}
   if(recalibrate)recalibrate.disabled=!memorizationRuntime.enabled||!settings.sensorEnabled;
+  $$('[data-detail-memorization-mode]').forEach(input=>{input.checked=memorizationRuntime.enabled;});
+  $$('[data-detail-memorization-sensor]').forEach(input=>{input.checked=Boolean(settings.sensorEnabled);input.disabled=!memorizationRuntime.enabled;});
+  $$('[data-detail-memorization-reveal]').forEach(button=>{const termId=button.dataset.detailMemorizationTerm||target;button.disabled=!memorizationRuntime.enabled||!termId;button.textContent=memorizationRevealButtonText(termId);});
+  $$('[data-detail-memorization-recalibrate]').forEach(button=>{button.disabled=!memorizationRuntime.enabled||!settings.sensorEnabled;});
+  $$('[data-detail-memorization-status]').forEach(el=>{el.textContent=memorizationRuntime.enabled?`${memorizationDecisionText()}。${memorizationRuntime.sensorMessage}`:'暗記モードはOFFです。';});
   if(panel){
     panel.classList.toggle('hidden',!settings.panelVisible);
     panel.classList.toggle('collapsed',memorizationRuntime.panelCollapsed);
