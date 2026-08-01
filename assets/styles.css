@@ -1696,6 +1696,40 @@ textarea {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
+.memorization-rating {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--panel-2);
+  padding: 10px;
+}
+
+.memorization-rating strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+
+.memorization-rating-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.memorization-rating-actions button {
+  min-height: 44px;
+  padding: 8px 7px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.memorization-rating-actions button.active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .knowledge-note-area:focus {
   outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-color: var(--accent);
@@ -2394,6 +2428,10 @@ dialog::backdrop {
   .knowledge-inline-actions {
     grid-template-columns: 1fr;
   }
+
+  .memorization-rating-actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2495,6 +2533,11 @@ html[data-theme="dark"] .memorization-cover {
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--panel) 92%, #0f766e), color-mix(in srgb, var(--panel-2) 92%, #0f172a)),
     var(--panel);
+}
+
+html[data-theme="dark"] .memorization-rating-actions button.active {
+  background: #134e4a;
+  color: #99f6e4;
 }
 
 html[data-theme="dark"] .bottom-nav {
