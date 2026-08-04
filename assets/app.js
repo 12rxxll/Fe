@@ -736,7 +736,7 @@ function renderMemorizationRatingSection(term){
 }
 function renderKnowledgeNoteSection(term,svc,heading='h5'){
   const writing=writingProgressForTerm(term),test=testProgressForTerm(term,svc);
-  return `<section class="map-detail-section knowledge-note-section"><div class="knowledge-note-title-row"><div><strong>${esc(term.name)}</strong><small>記述: ${esc(writing.label)} / テスト: ${esc(test.summary)}</small></div><div class="note-inline-nav" role="group" aria-label="用語移動"><button class="secondary" data-note-move="-1" data-note-move-term="${esc(term.id)}" type="button">前の用語</button><button class="secondary" data-note-move="1" data-note-move-term="${esc(term.id)}" type="button">次の用語</button></div></div><${heading}>自分の言葉でまとめる</${heading}><p class="knowledge-note-question">${esc(knowledgeWritingQuestion(term,svc))}</p><div class="memorization-note-wrap" data-memorization-term="${esc(term.id)}"><textarea class="knowledge-note-area" data-map-note-term="${esc(term.id)}" placeholder="定義・仕組み・FEで重要な点を、自分の言葉で書いてください">${esc(readKnowledgeTermNote(term))}</textarea><div class="memorization-cover" data-memorization-cover="${esc(term.id)}" aria-hidden="true"><strong>あなたの記述は隠れています</strong><span>マップ上部の暗記モードで表示を切り替えます。</span></div></div><p class="help" data-map-note-status>自動保存: 入力すると保存します。</p></section>`;
+  return `<section class="map-detail-section knowledge-note-section"><div class="knowledge-note-title-row"><div><strong>${esc(term.name)}</strong><small>記述: ${esc(writing.label)} / テスト: ${esc(test.summary)}</small></div><div class="note-inline-nav" role="group" aria-label="用語移動"><button class="secondary" data-note-move="-1" data-note-move-term="${esc(term.id)}" type="button">前の用語</button><button class="secondary" data-note-move="1" data-note-move-term="${esc(term.id)}" type="button">次の用語</button></div></div><${heading}>自分の言葉でまとめる</${heading}><p class="knowledge-note-question">${esc(knowledgeWritingQuestion(term,svc))}</p><div class="memorization-note-wrap" data-memorization-term="${esc(term.id)}"><textarea class="knowledge-note-area" data-map-note-term="${esc(term.id)}" placeholder="定義・仕組み・FEで重要な点を、自分の言葉で書いてください">${esc(readKnowledgeTermNote(term))}</textarea><div class="memorization-cover" data-memorization-cover="${esc(term.id)}" aria-hidden="true"><strong>あなたの記述は隠れています</strong><span>下のボタンで一時表示できます。</span></div></div><div class="memorization-note-action-row hidden" data-memorization-note-action-row="${esc(term.id)}"><button class="secondary memorization-note-reveal-button" data-memorization-note-reveal="${esc(term.id)}" type="button" aria-pressed="false">長押しで表示</button></div><p class="help" data-map-note-status>自動保存: 入力すると保存します。</p></section>`;
 }
 function splitRelatedNames(value){return String(value||'').split(/[\/、,，]/).map(name=>name.trim()).filter(Boolean);}
 function mapTermByName(svc,name){const key=normalize(name);return svc.terms.find(term=>normalize(term.name)===key)||null;}
@@ -900,7 +900,7 @@ function bindKnowledgeMapActions(){
   $$('[data-knowledge-detail-accordion]').forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();toggleKnowledgeDetailAccordion(button.dataset.knowledgeDetailAccordion);});
   $$('[data-term-explain-chatgpt]').forEach(button=>button.onclick=()=>openKnowledgeTermExplainChatGPT(button.dataset.termExplainChatgpt));
   $$('[data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
-  $$('[data-memorization-cover]').forEach(cover=>bindMemorizationCover(cover));
+  $$('[data-memorization-note-reveal]').forEach(button=>bindMemorizationNoteRevealButton(button));
   $$('[data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
   updateInlineNoteNavButtons();
   $$('[data-note-review-term]').forEach(select=>bindKnowledgeReviewSelect(select));
@@ -918,7 +918,7 @@ function renderKnowledgeDetail(termId){
   $$('#knowledgeDetailPanel [data-knowledge-detail-accordion]').forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();toggleKnowledgeDetailAccordion(button.dataset.knowledgeDetailAccordion);});
   $$('#knowledgeDetailPanel [data-term-explain-chatgpt]').forEach(button=>button.onclick=()=>openKnowledgeTermExplainChatGPT(button.dataset.termExplainChatgpt));
   $$('#knowledgeDetailPanel [data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
-  $$('#knowledgeDetailPanel [data-memorization-cover]').forEach(cover=>bindMemorizationCover(cover));
+  $$('#knowledgeDetailPanel [data-memorization-note-reveal]').forEach(button=>bindMemorizationNoteRevealButton(button));
   $$('#knowledgeDetailPanel [data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
   updateInlineNoteNavButtons();
   $$('#knowledgeDetailPanel [data-note-review-term]').forEach(select=>bindKnowledgeReviewSelect(select));
@@ -1549,6 +1549,10 @@ async function setMemorizationSensor(enabled,{persist=false,userGesture=false}={
   settings.sensorEnabled=Boolean(enabled);
   memorizationRuntime.sensorWanted=settings.sensorEnabled;
   if(settings.sensorEnabled)memorizationRuntime.panelCollapsed=false;
+  if(settings.sensorEnabled){
+    memorizationRuntime.manualRevealTermId='';
+    memorizationRuntime.manualToggleTermId='';
+  }
   if(persist)saveState(false);
   if(!settings.sensorEnabled){
     stopMemorizationSensor('ボタン操作のみ','センサ操作を停止しました');
@@ -1736,95 +1740,67 @@ function shouldRevealMemorizationTerm(termId){
   if(!memorizationRuntime.enabled)return true;
   return memorizationRuntime.allVisible||memorizationRuntime.manualRevealTermId===termId||memorizationRuntime.manualToggleTermId===termId||memorizationRuntime.sensorRevealTermId===termId;
 }
-function bindMemorizationCover(cover){
-  if(!cover||cover.dataset.memorizationCoverBound==='1')return;
-  cover.dataset.memorizationCoverBound='1';
-  const termId=cover.dataset.memorizationCover;
-  let holdTimer=null,startX=0,startY=0,revealedByCover=false;
-  const pointFromEvent=event=>{
-    const touch=event?.touches?.[0]||event?.changedTouches?.[0];
-    return touch||event||{clientX:0,clientY:0};
-  };
-  const clearHoldTimer=()=>{
-    if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
-  };
-  const removeTracking=()=>{
-    if(window.PointerEvent){
-      document.removeEventListener('pointermove',move,true);
-      document.removeEventListener('pointerup',stop,true);
-      document.removeEventListener('pointercancel',stop,true);
-    } else {
-      document.removeEventListener('touchmove',move,true);
-      document.removeEventListener('touchend',stop,true);
-      document.removeEventListener('touchcancel',stop,true);
-      document.removeEventListener('mousemove',move,true);
-      document.removeEventListener('mouseup',stop,true);
-    }
-  };
-  const addTracking=()=>{
-    if(window.PointerEvent){
-      document.addEventListener('pointermove',move,true);
-      document.addEventListener('pointerup',stop,true);
-      document.addEventListener('pointercancel',stop,true);
-    } else {
-      document.addEventListener('touchmove',move,{capture:true,passive:true});
-      document.addEventListener('touchend',stop,{capture:true,passive:false});
-      document.addEventListener('touchcancel',stop,{capture:true,passive:false});
-      document.addEventListener('mousemove',move,true);
-      document.addEventListener('mouseup',stop,true);
-    }
-  };
-  const reveal=()=>{
-    holdTimer=null;
-    revealedByCover=true;
-    activeKnowledgeNoteTermId=termId;
-    memorizationRuntime.manualRevealTermId=termId;
-    memorizationRuntime.sensorRevealTermId='';
-    applyMemorizationCovers();
-  };
+function canUseMemorizationNoteButton(){
+  const settings=memorizationSettings();
+  return memorizationRuntime.enabled&&!settings.sensorEnabled;
+}
+function revealManualMemorizationTerm(termId){
+  if(!termId||!canUseMemorizationNoteButton())return false;
+  activeKnowledgeNoteTermId=termId;
+  memorizationRuntime.manualRevealTermId=termId;
+  memorizationRuntime.sensorRevealTermId='';
+  applyMemorizationCovers();
+  return true;
+}
+function toggleManualMemorizationTerm(termId){
+  if(!termId||!canUseMemorizationNoteButton())return;
+  activeKnowledgeNoteTermId=termId;
+  memorizationRuntime.manualToggleTermId=memorizationRuntime.manualToggleTermId===termId?'':termId;
+  memorizationRuntime.manualRevealTermId='';
+  memorizationRuntime.sensorRevealTermId='';
+  applyMemorizationCovers();
+}
+function bindMemorizationNoteRevealButton(button){
+  if(!button||button.dataset.memorizationNoteRevealBound==='1')return;
+  button.dataset.memorizationNoteRevealBound='1';
+  const termId=button.dataset.memorizationNoteReveal;
+  let pressing=false;
   const start=event=>{
-    if(!termId||!memorizationRuntime.enabled||memorizationSettings().manualMode!=='hold')return;
+    if(memorizationSettings().manualMode!=='hold'||!canUseMemorizationNoteButton())return;
+    event.preventDefault();
     event.stopPropagation();
-    const point=pointFromEvent(event);
-    startX=Number(point.clientX)||0;
-    startY=Number(point.clientY)||0;
-    clearHoldTimer();
-    removeTracking();
-    revealedByCover=false;
-    holdTimer=setTimeout(reveal,280);
-    addTracking();
-  };
-  const move=event=>{
-    if(!holdTimer)return;
-    const point=pointFromEvent(event),dx=(Number(point.clientX)||0)-startX,dy=(Number(point.clientY)||0)-startY;
-    if(Math.hypot(dx,dy)>12){
-      clearHoldTimer();
-      removeTracking();
+    pressing=revealManualMemorizationTerm(termId);
+    if(pressing&&event.pointerId!==undefined){
+      try{button.setPointerCapture?.(event.pointerId);}catch(e){}
     }
   };
   const stop=event=>{
-    const shouldHide=revealedByCover&&memorizationRuntime.manualRevealTermId===termId;
-    clearHoldTimer();
-    removeTracking();
-    if(!shouldHide)return;
+    if(!pressing||memorizationRuntime.manualRevealTermId!==termId)return;
     event?.preventDefault?.();
     event?.stopPropagation?.();
-    revealedByCover=false;
+    pressing=false;
     stopManualMemorizationReveal();
   };
   if(window.PointerEvent){
-    cover.addEventListener('pointerdown',start);
-    cover.addEventListener('pointerup',stop);
-    cover.addEventListener('pointercancel',stop);
+    button.addEventListener('pointerdown',start);
+    button.addEventListener('pointerup',stop);
+    button.addEventListener('pointercancel',stop);
+    button.addEventListener('lostpointercapture',stop);
   } else {
-    cover.addEventListener('touchstart',start,{passive:false});
-    cover.addEventListener('touchend',stop,{passive:false});
-    cover.addEventListener('touchcancel',stop,{passive:false});
-    cover.addEventListener('mousedown',start);
-    cover.addEventListener('mouseup',stop);
+    button.addEventListener('touchstart',start,{passive:false});
+    button.addEventListener('touchend',stop,{passive:false});
+    button.addEventListener('touchcancel',stop,{passive:false});
+    button.addEventListener('mousedown',start);
+    button.addEventListener('mouseup',stop);
+    button.addEventListener('mouseleave',stop);
   }
-  cover.addEventListener('mouseleave',stop);
-  cover.addEventListener('contextmenu',event=>event.preventDefault());
+  button.addEventListener('click',event=>{
+    if(memorizationSettings().manualMode!=='tap')return;
+    event.preventDefault();
+    event.stopPropagation();
+    toggleManualMemorizationTerm(termId);
+  });
+  button.addEventListener('contextmenu',event=>event.preventDefault());
 }
 function clearMemorizationReveal({clearAll=true}={}){
   memorizationRuntime.sensorRevealTermId='';
@@ -1835,6 +1811,7 @@ function clearMemorizationReveal({clearAll=true}={}){
 }
 function applyMemorizationCovers(){
   const active=memorizationRuntime.enabled;
+  const settings=memorizationSettings(),showNoteButton=active&&!settings.sensorEnabled;
   document.documentElement.classList.toggle('memorization-active',active);
   $$('[data-memorization-term]').forEach(wrapper=>{
     const termId=wrapper.dataset.memorizationTerm,hidden=active&&!shouldRevealMemorizationTerm(termId),revealed=active&&!hidden;
@@ -1843,6 +1820,16 @@ function applyMemorizationCovers(){
     const area=wrapper.querySelector('.knowledge-note-area'),cover=wrapper.querySelector('.memorization-cover');
     if(area)area.readOnly=hidden;
     if(cover)cover.setAttribute('aria-hidden',hidden?'false':'true');
+  });
+  $$('[data-memorization-note-action-row]').forEach(row=>{
+    row.classList.toggle('hidden',!showNoteButton);
+  });
+  $$('[data-memorization-note-reveal]').forEach(button=>{
+    const termId=button.dataset.memorizationNoteReveal;
+    const toggleActive=memorizationRuntime.manualToggleTermId===termId,holdActive=memorizationRuntime.manualRevealTermId===termId;
+    button.disabled=!showNoteButton;
+    button.setAttribute('aria-pressed',(toggleActive||holdActive)?'true':'false');
+    button.textContent=settings.manualMode==='tap'?(toggleActive?'タップで隠す':'タップで表示'):(holdActive?'表示中':'長押しで表示');
   });
   renderMemorizationPanel();
 }

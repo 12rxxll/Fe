@@ -2343,10 +2343,6 @@ input[type="date"]::-webkit-date-and-time-value {
   color: var(--text);
   padding: 10px;
   text-align: center;
-  touch-action: manipulation;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 .memorization-cover strong,
@@ -2377,6 +2373,19 @@ input[type="date"]::-webkit-date-and-time-value {
 .memorization-active .memorization-note-wrap.is-revealed .knowledge-note-area {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.memorization-note-action-row {
+  display: grid;
+  margin-top: 8px;
+}
+
+.memorization-note-reveal-button {
+  min-height: 44px;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .memorization-rating {
