@@ -1,9 +1,9 @@
-const CACHE = 'fe-learning-os-v2-20260804-ai-record-v31';
+const CACHE = 'fe-learning-os-v2-20260804-ai-record-detail-v32';
 const ASSET_PATHS = [
   './',
   './index.html',
-  './assets/styles.css?v=2.1.13',
-  './assets/app.js?v=2.1.13',
+  './assets/styles.css?v=2.1.14',
+  './assets/app.js?v=2.1.14',
   './assets/terms-data.js',
   './assets/syllabus-terms.js',
   './assets/subject-a-data.js',

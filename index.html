@@ -9,7 +9,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./assets/styles.css?v=2.1.13">
+  <link rel="stylesheet" href="./assets/styles.css?v=2.1.14">
   <title>FE Learning OS</title>
 </head>
 <body>
@@ -361,50 +361,79 @@
           <h3 id="aiUsageRecordTitle">提出用AI利用記録</h3>
           <span class="badge gray">レポート補助</span>
         </div>
-        <p class="help">採点者が、AIへ出した指示・AIの出力結果・自分で確認して直した点を確認できるようにまとめています。</p>
+        <p class="help">採点者が、AIへ出した指示、AIが提案した内容、採用した実装、自分で確認して直した点を順番に追えるようにまとめています。</p>
         <div class="ai-record-summary">
           <span><strong>目的</strong><small>スマホ内蔵センサを使う暗記モードを追加</small></span>
           <span><strong>使用AI</strong><small>ChatGPT / Codex</small></span>
-          <span><strong>共有方針</strong><small>Codex内部リンクではなく提出用記録を提示</small></span>
+          <span><strong>提出方法</strong><small>アプリ内記録とChatGPT共有チャットで説明</small></span>
         </div>
         <details class="ai-record-details" open>
-          <summary>AIへ出した主な指示</summary>
+          <summary>1. AIへ出した主な指示</summary>
           <ul>
-            <li>既存のFE Learning OSを壊さず、暗記モードを追加する。</li>
-            <li>スマートフォンの端末方向センサを使い、傾けた時だけ現在の用語の記述を表示する。</li>
-            <li>センサ値は保存・送信せず、外部API、カメラ、マイク、位置情報、アクセス解析を使わない。</li>
-            <li>iPhone Safariで使えるように、許可要求とボタン操作の代替手段を用意する。</li>
+            <li>基本情報技術者試験の学習アプリであるFE Learning OSに、スマートフォン内蔵センサを使った暗記モードを追加するように指示した。</li>
+            <li>既存の学習履歴、記述内容、復習状態、ChatGPT送信履歴、localStorageの保存形式を壊さないことを条件にした。</li>
+            <li>端末を意図的に傾けた時だけ、現在見ている用語の「自分の記述」を一時的に表示し、元の姿勢に戻したら再び隠すように指示した。</li>
+            <li>iPhone Safariを優先し、DeviceOrientationEvent.requestPermission()が必要な場合に対応すること、センサ拒否時や非対応時にはボタン操作だけで使えるようにすることを指示した。</li>
+            <li>外部通信、アクセス解析、外部CDN、外部API、カメラ、マイク、位置情報は使わず、センサ値を保存・送信しないように指定した。</li>
+            <li>課題提出で説明しやすいように、センサ値の表示だけでなく、可視化、判定、操作として分かるUIを入れるように指示した。</li>
           </ul>
         </details>
         <details class="ai-record-details">
-          <summary>AIが提案・生成し、実装した結果</summary>
+          <summary>2. AIが提案し、実装に採用した内容</summary>
           <ul>
-            <li>DeviceOrientationEventのbeta/gammaから基準姿勢との差を計算する処理を追加した。</li>
-            <li>傾き量、センサ状態、表示までの残り角度を画面に表示した。</li>
-            <li>約25度で表示、約10度で非表示に戻す判定と、長押し/タップで表示する手動操作を追加した。</li>
-            <li>暗記モード中は自分の記述だけを隠し、問いや用語名は表示したままにした。</li>
+            <li>スマートフォンの端末方向センサからbetaとgammaを取得し、暗記モード開始時または再調整時の姿勢を基準姿勢にする設計を採用した。</li>
+            <li>現在のbeta/gammaと基準姿勢との差分から傾き量を計算し、25度以上で表示、10度以内で非表示に戻す判定を入れた。</li>
+            <li>しきい値を2つに分けるヒステリシスを使い、境界付近で答えの表示が点滅しないようにした。</li>
+            <li>傾き量をそのまま使わず、複数回のセンサ値を平均して小さな揺れに反応しにくくした。</li>
+            <li>暗記モード中は、用語名と問いは見えるままにし、利用者が自分で書いた記述欄だけを隠すオーバーレイ方式にした。</li>
+            <li>センサ状態、基準との差、現在の判定、表示開始しきい値までの残り角度を画面に出し、ゲージで可視化した。</li>
+            <li>センサが使えない端末でも課題の動作確認ができるように、長押しで答えを見る操作と、設定によってタップで切り替える操作を用意した。</li>
           </ul>
         </details>
         <details class="ai-record-details">
-          <summary>自分で確認・修正した点</summary>
+          <summary>3. AIの出力を自分で確認した方法</summary>
           <ul>
-            <li>iPhone Safariではユーザー操作中にrequestPermission()が必要なため、センサ操作ON時に許可確認する形へ修正した。</li>
-            <li>暗記モードOFF時はセンサ操作を無効化し、内部状態もOFFへ戻すようにした。</li>
-            <li>センサ拒否・非対応時にクラッシュせず、ボタン操作のみで使えるようにした。</li>
-            <li>長押し時にiOSの文字選択が邪魔になったため、保存状態表示を選択不可にした。</li>
-            <li>PWAキャッシュで古い画面が残らないよう、バージョンとService Workerキャッシュ名を更新した。</li>
+            <li>実際にスマートフォンで暗記モードをONにし、自分の記述だけが隠れ、問いと用語名は表示されたままになることを確認した。</li>
+            <li>センサ操作ONで傾き量の表示が変わること、表示開始しきい値を超えた時だけ現在の用語の答えが表示されることを確認した。</li>
+            <li>端末を元の姿勢へ戻した時に答えが再び隠れること、他の用語の記述まで同時に表示されないことを確認した。</li>
+            <li>センサを使わない状態でも、長押しボタンまたはタップ切替で答えを表示できることを確認した。</li>
+            <li>設定を変更した後、暗記モード、センサ操作、しきい値、手動表示方式が実際のマップ画面へ反映されるか確認した。</li>
+            <li>localStorageの学習履歴や自分の記述が消えないこと、バックアップ対象からセンサの生値が除外されていることを確認した。</li>
           </ul>
         </details>
         <details class="ai-record-details">
-          <summary>Codex共有リンクについて</summary>
-          <p>Codexの <code>codex://threads/...</code> はアプリ内でスレッドを開くための内部リンクで、採点者が外部から閲覧できる公開共有リンクではありません。そのため、この設定画面の記録と、別途作成したChatGPT共有チャットをAI利用記録として提出します。</p>
+          <summary>4. 自分で修正した点と理由</summary>
+          <ul>
+            <li>iPhone Safariではユーザー操作中でないとDeviceOrientationEvent.requestPermission()を呼べないため、センサ操作ONボタンを押した時に許可確認する流れへ修正した。</li>
+            <li>暗記モードがOFFなのにセンサ操作だけONにできると動作が分かりにくいため、暗記モードOFF時はセンサ操作を無効化し、内部状態もOFFへ戻すようにした。</li>
+            <li>センサ許可を拒否した場合や非対応ブラウザの場合にアプリが止まらないよう、ボタン操作のみへ切り替える表示と処理を追加した。</li>
+            <li>長押しで答えを見る時、iOSの文字選択やルーペが保存状態の文字に反応して邪魔になったため、保存状態の表示を選択不可にした。</li>
+            <li>状態を色だけで表すと分かりにくいため、「センサON」「ボタン操作のみ」「答えを隠しています」などの文字ラベルも表示した。</li>
+            <li>PWAでは古いJavaScriptやCSSがキャッシュに残ることがあったため、変更のたびにバージョン番号とService Workerのキャッシュ名を更新した。</li>
+          </ul>
         </details>
+        <details class="ai-record-details">
+          <summary>5. 課題要件との対応</summary>
+          <ul>
+            <li>生成AIの使用: ChatGPT/Codexに要件整理、実装案、コード修正、確認観点の整理を依頼した。</li>
+            <li>スマートフォン内蔵センサ: DeviceOrientationEventで端末方向センサのbeta/gammaを利用した。</li>
+            <li>センサ値の表示: センサ状態、基準姿勢との差、表示までの残り角度を画面に表示した。</li>
+            <li>可視化・判定・操作: 傾き量をゲージで可視化し、しきい値を超えた時だけ答えを表示する判定と操作に使った。</li>
+            <li>安全性: センサ値を保存・送信せず、カメラ、マイク、位置情報、外部通信、アクセス解析を使わない設計にした。</li>
+            <li>動作確認: iPhone SafariまたはPWAとして動作確認し、センサ許可やHTTPSが必要な点を問題点として記録した。</li>
+          </ul>
+        </details>
+        <details class="ai-record-details">
+          <summary>6. Codex共有リンクについて</summary>
+          <p>Codexの <code>codex://threads/...</code> は、Codexアプリ内で自分の作業スレッドを開くための内部リンクです。通常のWeb公開URLではないため、採点者が外部ブラウザから閲覧できる共有リンクとしては使えません。また、この開発スレッドには課題以外の作業、GitHub操作、個人情報に近い内容も混ざるため、そのまま共有すると安全性と分かりやすさの両方に問題があります。そのため、課題提出では、この設定画面に整理したAI利用記録と、個人情報を含めない短いChatGPT共有チャットを提出用の証拠として使います。</p>
+        </details>
+        <p class="help">この記録は採点用に説明を整理したものです。センサ値や個人情報は含めていません。</p>
         <div class="ai-record-actions">
           <button id="copyAiUsageRecordButton" class="primary" type="button">提出用AI利用記録をコピー</button>
           <a class="secondary full" href="./assignments/b-sensor-memory/chatgpt-share-prompt.html" target="_blank" rel="noopener">共有チャット作成ページを開く</a>
         </div>
       </section>
-      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.1.13</p><p>オフライン対応・GitHub Pages対応</p></section>
+      <section class="panel app-info"><h3>アプリ情報</h3><p>収録用語 <strong id="appTermCount"></strong></p><p>バージョン 2.1.14</p><p>オフライン対応・GitHub Pages対応</p></section>
     </section>
   </main>
 
@@ -429,6 +458,6 @@
   <script src="./assets/subject-a-data.js"></script>
   <script src="./assets/knowledge-map-data.js"></script>
   <script src="./assets/knowledge-map.js"></script>
-  <script src="./assets/app.js?v=2.1.13"></script>
+  <script src="./assets/app.js?v=2.1.14"></script>
 </body>
 </html>
