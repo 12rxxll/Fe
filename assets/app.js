@@ -54,8 +54,6 @@ let memorizationRotationPauseUntil = 0;
 let knowledgeUiSaveTimer = null;
 let settingsAutoSaveTimer = null;
 let keyboardStateTimer = null;
-let memorizationPanelRenderTimer = null;
-let memorizationPanelLastRenderAt = 0;
 const memorizationRuntime = {
   enabled:false,
   sensorWanted:false,
@@ -1487,38 +1485,19 @@ function hydrateMemorizationRuntime(){
 function bindMemorizationControls(){
   const mode=$('memorizationModeToggle'),sensor=$('memorizationSensorToggle'),reveal=$('memorizationRevealButton'),all=$('memorizationAllButton'),recalibrate=$('memorizationRecalibrateButton'),panelToggle=$('memorizationPanelToggle');
   if(!mode||!sensor||!reveal||!all||!recalibrate)return;
-  let holdRevealActive=false,touchHoldActive=false;
-  const startHoldReveal=event=>{
-    if(memorizationSettings().manualMode!=='hold'||!memorizationRuntime.enabled)return;
-    if(event?.cancelable!==false)event?.preventDefault?.();
-    if(event?.type==='touchstart')touchHoldActive=true;
-    holdRevealActive=true;
-    startManualMemorizationReveal();
-    if(event?.pointerId!==undefined){
-      try{reveal.setPointerCapture?.(event.pointerId);}catch(e){}
-    }
-  };
-  const stopHoldReveal=event=>{
-    if(event?.type==='pointercancel'&&touchHoldActive)return;
-    const shouldStop=holdRevealActive||Boolean(memorizationRuntime.manualRevealTermId);
-    if(event?.type==='touchend'||event?.type==='touchcancel')touchHoldActive=false;
-    if(!shouldStop)return;
-    if(!holdRevealActive&&!memorizationRuntime.manualRevealTermId)return;
-    holdRevealActive=false;
-    stopManualMemorizationReveal();
-  };
   mode.addEventListener('change',()=>setMemorizationMode(mode.checked,{persist:true,userGesture:true}));
   sensor.addEventListener('change',()=>setMemorizationSensor(sensor.checked,{persist:true,userGesture:true}));
-  reveal.addEventListener('pointerdown',startHoldReveal);
-  ['pointerup','pointercancel','lostpointercapture'].forEach(type=>reveal.addEventListener(type,stopHoldReveal));
-  reveal.addEventListener('touchstart',startHoldReveal,{passive:false});
-  ['touchend','touchcancel'].forEach(type=>reveal.addEventListener(type,stopHoldReveal,{passive:false}));
-  reveal.addEventListener('mousedown',startHoldReveal);
-  ['mouseup','mouseleave','blur'].forEach(type=>reveal.addEventListener(type,stopHoldReveal));
-  window.addEventListener('pointerup',stopHoldReveal);
-  window.addEventListener('touchend',stopHoldReveal,{passive:true});
-  window.addEventListener('touchcancel',stopHoldReveal,{passive:true});
-  window.addEventListener('blur',stopHoldReveal);
+  reveal.addEventListener('pointerdown',event=>{
+    if(memorizationSettings().manualMode!=='hold'||!memorizationRuntime.enabled)return;
+    event.preventDefault();
+    reveal.setPointerCapture?.(event.pointerId);
+    startManualMemorizationReveal();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(type=>reveal.addEventListener(type,event=>{
+    if(memorizationSettings().manualMode!=='hold')return;
+    event.preventDefault();
+    stopManualMemorizationReveal();
+  }));
   reveal.addEventListener('click',()=>{
     if(memorizationSettings().manualMode==='tap')toggleManualMemorizationReveal();
   });
@@ -1694,10 +1673,9 @@ function handleMemorizationOrientation(event){
   }
   const now=Date.now();
   if(document.hidden||now<memorizationRotationPauseUntil){
-    const hadSensorReveal=Boolean(memorizationRuntime.sensorRevealTermId);
     memorizationRuntime.sensorRevealTermId='';
-    if(hadSensorReveal)applyMemorizationCovers();
-    else queueMemorizationPanelRender();
+    renderMemorizationPanel();
+    applyMemorizationCovers();
     return;
   }
   const settings=memorizationSettings();
@@ -1707,7 +1685,7 @@ function handleMemorizationOrientation(event){
   if(memorizationRuntime.samples.length>8)memorizationRuntime.samples.shift();
   memorizationRuntime.smoothTilt=memorizationRuntime.samples.reduce((sum,value)=>sum+value,0)/memorizationRuntime.samples.length;
   if(memorizationRuntime.allVisible||memorizationRuntime.manualRevealTermId||memorizationRuntime.manualToggleTermId){
-    queueMemorizationPanelRender();
+    renderMemorizationPanel();
     return;
   }
   if(memorizationRuntime.sensorRevealTermId){
@@ -1730,7 +1708,7 @@ function handleMemorizationOrientation(event){
   } else {
     memorizationRuntime.tiltHoldStart=0;
   }
-  queueMemorizationPanelRender();
+  renderMemorizationPanel();
 }
 function handleMemorizationVisibilityChange(){
   if(!memorizationRuntime.enabled)return;
@@ -1844,21 +1822,7 @@ function memorizationDecisionText(){
   if(memorizationRuntime.sensorRevealTermId)return '傾きで表示中';
   return '答えを隠しています';
 }
-function queueMemorizationPanelRender(minDelay=120){
-  const now=Date.now(),elapsed=now-memorizationPanelLastRenderAt,remaining=minDelay-elapsed;
-  if(remaining<=0){
-    if(memorizationPanelRenderTimer){clearTimeout(memorizationPanelRenderTimer);memorizationPanelRenderTimer=null;}
-    renderMemorizationPanel();
-    return;
-  }
-  if(memorizationPanelRenderTimer)return;
-  memorizationPanelRenderTimer=setTimeout(()=>{
-    memorizationPanelRenderTimer=null;
-    renderMemorizationPanel();
-  },remaining);
-}
 function renderMemorizationPanel(){
-  memorizationPanelLastRenderAt=Date.now();
   const mode=$('memorizationModeToggle');if(!mode)return;
   const settings=memorizationSettings(),sensor=$('memorizationSensorToggle'),badge=$('memorizationStatusBadge'),hint=$('memorizationHint'),reveal=$('memorizationRevealButton'),all=$('memorizationAllButton'),recalibrate=$('memorizationRecalibrateButton'),panel=$('memorizationSensorPanel'),panelBody=$('memorizationSensorPanelBody'),panelToggle=$('memorizationPanelToggle');
   mode.checked=memorizationRuntime.enabled;

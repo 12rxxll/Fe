@@ -2199,12 +2199,6 @@ input[type="date"]::-webkit-date-and-time-value {
   padding: 9px 10px;
 }
 
-#memorizationRevealButton {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
 .memorization-sensor-panel {
   display: grid;
   gap: 9px;
