@@ -900,6 +900,7 @@ function bindKnowledgeMapActions(){
   $$('[data-knowledge-detail-accordion]').forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();toggleKnowledgeDetailAccordion(button.dataset.knowledgeDetailAccordion);});
   $$('[data-term-explain-chatgpt]').forEach(button=>button.onclick=()=>openKnowledgeTermExplainChatGPT(button.dataset.termExplainChatgpt));
   $$('[data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
+  $$('[data-memorization-cover]').forEach(cover=>bindMemorizationCover(cover));
   $$('[data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
   updateInlineNoteNavButtons();
   $$('[data-note-review-term]').forEach(select=>bindKnowledgeReviewSelect(select));
@@ -917,6 +918,7 @@ function renderKnowledgeDetail(termId){
   $$('#knowledgeDetailPanel [data-knowledge-detail-accordion]').forEach(button=>button.onclick=event=>{event.preventDefault();event.stopPropagation();toggleKnowledgeDetailAccordion(button.dataset.knowledgeDetailAccordion);});
   $$('#knowledgeDetailPanel [data-term-explain-chatgpt]').forEach(button=>button.onclick=()=>openKnowledgeTermExplainChatGPT(button.dataset.termExplainChatgpt));
   $$('#knowledgeDetailPanel [data-map-note-term]').forEach(area=>bindKnowledgeNoteArea(area));
+  $$('#knowledgeDetailPanel [data-memorization-cover]').forEach(cover=>bindMemorizationCover(cover));
   $$('#knowledgeDetailPanel [data-note-move]').forEach(button=>bindKnowledgeNoteMoveButton(button));
   updateInlineNoteNavButtons();
   $$('#knowledgeDetailPanel [data-note-review-term]').forEach(select=>bindKnowledgeReviewSelect(select));
@@ -1733,6 +1735,96 @@ function handleMemorizationOrientationChange(){
 function shouldRevealMemorizationTerm(termId){
   if(!memorizationRuntime.enabled)return true;
   return memorizationRuntime.allVisible||memorizationRuntime.manualRevealTermId===termId||memorizationRuntime.manualToggleTermId===termId||memorizationRuntime.sensorRevealTermId===termId;
+}
+function bindMemorizationCover(cover){
+  if(!cover||cover.dataset.memorizationCoverBound==='1')return;
+  cover.dataset.memorizationCoverBound='1';
+  const termId=cover.dataset.memorizationCover;
+  let holdTimer=null,startX=0,startY=0,revealedByCover=false;
+  const pointFromEvent=event=>{
+    const touch=event?.touches?.[0]||event?.changedTouches?.[0];
+    return touch||event||{clientX:0,clientY:0};
+  };
+  const clearHoldTimer=()=>{
+    if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
+  };
+  const removeTracking=()=>{
+    if(window.PointerEvent){
+      document.removeEventListener('pointermove',move,true);
+      document.removeEventListener('pointerup',stop,true);
+      document.removeEventListener('pointercancel',stop,true);
+    } else {
+      document.removeEventListener('touchmove',move,true);
+      document.removeEventListener('touchend',stop,true);
+      document.removeEventListener('touchcancel',stop,true);
+      document.removeEventListener('mousemove',move,true);
+      document.removeEventListener('mouseup',stop,true);
+    }
+  };
+  const addTracking=()=>{
+    if(window.PointerEvent){
+      document.addEventListener('pointermove',move,true);
+      document.addEventListener('pointerup',stop,true);
+      document.addEventListener('pointercancel',stop,true);
+    } else {
+      document.addEventListener('touchmove',move,{capture:true,passive:true});
+      document.addEventListener('touchend',stop,{capture:true,passive:false});
+      document.addEventListener('touchcancel',stop,{capture:true,passive:false});
+      document.addEventListener('mousemove',move,true);
+      document.addEventListener('mouseup',stop,true);
+    }
+  };
+  const reveal=()=>{
+    holdTimer=null;
+    revealedByCover=true;
+    activeKnowledgeNoteTermId=termId;
+    memorizationRuntime.manualRevealTermId=termId;
+    memorizationRuntime.sensorRevealTermId='';
+    applyMemorizationCovers();
+  };
+  const start=event=>{
+    if(!termId||!memorizationRuntime.enabled||memorizationSettings().manualMode!=='hold')return;
+    event.stopPropagation();
+    const point=pointFromEvent(event);
+    startX=Number(point.clientX)||0;
+    startY=Number(point.clientY)||0;
+    clearHoldTimer();
+    removeTracking();
+    revealedByCover=false;
+    holdTimer=setTimeout(reveal,280);
+    addTracking();
+  };
+  const move=event=>{
+    if(!holdTimer)return;
+    const point=pointFromEvent(event),dx=(Number(point.clientX)||0)-startX,dy=(Number(point.clientY)||0)-startY;
+    if(Math.hypot(dx,dy)>12){
+      clearHoldTimer();
+      removeTracking();
+    }
+  };
+  const stop=event=>{
+    const shouldHide=revealedByCover&&memorizationRuntime.manualRevealTermId===termId;
+    clearHoldTimer();
+    removeTracking();
+    if(!shouldHide)return;
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    revealedByCover=false;
+    stopManualMemorizationReveal();
+  };
+  if(window.PointerEvent){
+    cover.addEventListener('pointerdown',start);
+    cover.addEventListener('pointerup',stop);
+    cover.addEventListener('pointercancel',stop);
+  } else {
+    cover.addEventListener('touchstart',start,{passive:false});
+    cover.addEventListener('touchend',stop,{passive:false});
+    cover.addEventListener('touchcancel',stop,{passive:false});
+    cover.addEventListener('mousedown',start);
+    cover.addEventListener('mouseup',stop);
+  }
+  cover.addEventListener('mouseleave',stop);
+  cover.addEventListener('contextmenu',event=>event.preventDefault());
 }
 function clearMemorizationReveal({clearAll=true}={}){
   memorizationRuntime.sensorRevealTermId='';

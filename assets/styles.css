@@ -2343,6 +2343,10 @@ input[type="date"]::-webkit-date-and-time-value {
   color: var(--text);
   padding: 10px;
   text-align: center;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .memorization-cover strong,
