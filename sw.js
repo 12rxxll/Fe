@@ -1,14 +1,15 @@
-const CACHE = 'fe-learning-os-v2-20260804-note-status-v30';
+const CACHE = 'fe-learning-os-v2-20260804-ai-record-v31';
 const ASSET_PATHS = [
   './',
   './index.html',
-  './assets/styles.css?v=2.1.12',
-  './assets/app.js?v=2.1.12',
+  './assets/styles.css?v=2.1.13',
+  './assets/app.js?v=2.1.13',
   './assets/terms-data.js',
   './assets/syllabus-terms.js',
   './assets/subject-a-data.js',
   './assets/knowledge-map-data.js',
   './assets/knowledge-map.js',
+  './assignments/b-sensor-memory/chatgpt-share-prompt.html',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

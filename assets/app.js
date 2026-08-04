@@ -485,6 +485,7 @@ function setup(){
   $('importInput').addEventListener('change',importData);
   $('resetButton').addEventListener('click',resetData);
   $('copyGeneralPromptButton').addEventListener('click',copyWeakPrompt);
+  $('copyAiUsageRecordButton')?.addEventListener('click',copyAiUsageRecord);
   $('reloadUpdateButton').addEventListener('click',()=>{if(pendingServiceWorker)pendingServiceWorker.postMessage({type:'SKIP_WAITING'});});
   document.addEventListener('keydown',handleKnowledgeNoteKeydown);
   document.addEventListener('compositionstart',handleKnowledgeCompositionStart,true);
@@ -2320,6 +2321,43 @@ function fallbackCopy(text,msg){const ta=document.createElement('textarea');ta.v
 function compactWeakSummary(limit=5){const today=localDate(),todayWrong=state.attempts.filter(a=>a.date===today&&!a.correct).map(a=>termById.get(String(a.id))).filter(Boolean),weak=TERMS.filter(t=>readTermState(t.id).wrong>0).sort((a,b)=>readTermState(b.id).wrong-readTermState(a.id).wrong);const merged=[],seen=new Set();[todayWrong,weak].forEach(group=>group.forEach(t=>{if(merged.length<limit&&!seen.has(String(t.id))){seen.add(String(t.id));merged.push(t);}}));return merged.length?merged.map(t=>`${t['用語']}（${t['系']}、誤答${readTermState(t.id).wrong}回）`).join('、'):'まだ誤答データなし';}
 function copyTermPrompt(t,kind){const s=readTermState(t.id),base=`基本情報技術者試験の用語「${t['用語']}」（${t['系']} / ${t['中分類']}）について。`;const rel=String(t['関連語']||'').split('/').map(x=>x.trim()).filter(Boolean).slice(0,5).join('、')||'関連語なし';const prompts={explain:`${base}初心者向けに、1. 一言での定義 2. 具体例 3. 試験で問われるポイント 4. 関連語との違い、の順で説明してください。関連語: ${rel}。`,mistake:`${base}私はこの用語で誤答が${s.wrong}回あります。よくある勘違いを3つ挙げ、正しい見分け方と短い確認問題を1問作ってください。個人情報は含めず、FE試験向けに説明してください。`,questions:`${base}関連問題をオリジナルで3問作ってください。各問は4択、正解、解説、関連語を付けてください。過去問の転載はしないでください。関連語: ${rel}。`};copyText(prompts[kind]||prompts.explain,'質問文をコピーしました');}
 function copyWeakPrompt(){const summary=compactWeakSummary(5);copyText(`私は基本情報技術者試験を勉強しています。今日の弱点候補は「${summary}」です。個人情報や詳細な学習履歴は使わず、1. 共通する勘違い 2. 優先順位 3. 30分の復習メニュー 4. 確認問題3問、の順で整理してください。`,'弱点整理プロンプトをコピーしました');}
+function aiUsageRecordText(){
+  return `提出用AI利用記録
+
+目的:
+生成AIを使い、スマートフォン内蔵センサを利用したWebアプリ機能を制作したことを示す。
+既存のFE Learning OSに、端末方向センサを使った暗記モードを追加した。
+
+使用した生成AI:
+ChatGPT / Codex
+
+AIへ出した主な指示:
+- 既存のFE Learning OSを壊さず、暗記モードを追加する。
+- スマートフォンの端末方向センサを使い、傾けた時だけ現在の用語の記述を表示する。
+- センサ値は保存・送信しない。
+- 外部API、外部CDN、アクセス解析、カメラ、マイク、位置情報を使わない。
+- iPhone Safariで使えるように、許可要求とボタン操作の代替手段を用意する。
+
+AIが提案・生成し、実装した結果:
+- DeviceOrientationEventからbeta/gammaを取得する構成にした。
+- 暗記モード開始時またはセンサ再調整時の姿勢を基準姿勢にした。
+- 基準姿勢との差から傾き量を計算し、画面に角度とゲージを表示した。
+- 約25度以上で現在用語の記述を表示し、約10度以内へ戻ると再び隠す判定を入れた。
+- センサが使えない場合でも、長押しまたはタップ切替の手動ボタンで答えを表示できるようにした。
+
+自分で確認・修正した点:
+- iPhone Safariではユーザー操作中にDeviceOrientationEvent.requestPermission()が必要なため、センサ操作ON時に許可確認する形へ修正した。
+- 暗記モードOFF時はセンサ操作を選択できないようにし、内部状態もOFFへ戻すようにした。
+- センサ拒否・非対応時にクラッシュせず、ボタン操作のみで使えるようにした。
+- 状態を色だけでなく文字ラベルでも分かるようにした。
+- iOSの長押し選択が邪魔になったため、保存状態表示を選択不可にした。
+- PWAキャッシュで古い画面が残らないよう、バージョンとService Workerキャッシュ名を更新した。
+
+Codex共有リンクについて:
+Codexの codex://threads/... はアプリ内でスレッドを開くための内部リンクで、採点者が外部から閲覧できる公開共有リンクではない。
+そのため、提出時はこの設定画面の記録と、別途作成したChatGPT共有チャットをAI利用記録として提示する。`;
+}
+function copyAiUsageRecord(){copyText(aiUsageRecordText(),'提出用AI利用記録をコピーしました');}
 
 setup();
 })();
