@@ -2378,11 +2378,19 @@ input[type="date"]::-webkit-date-and-time-value {
 .memorization-note-action-row {
   display: grid;
   margin-top: 8px;
+  margin-bottom: 6px;
 }
 
 .memorization-note-reveal-button {
   min-height: 44px;
   touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+[data-map-note-status] {
+  pointer-events: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;

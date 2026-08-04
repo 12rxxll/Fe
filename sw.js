@@ -1,9 +1,9 @@
-const CACHE = 'fe-learning-os-v2-20260804-note-reveal-v29';
+const CACHE = 'fe-learning-os-v2-20260804-note-status-v30';
 const ASSET_PATHS = [
   './',
   './index.html',
-  './assets/styles.css?v=2.1.11',
-  './assets/app.js?v=2.1.11',
+  './assets/styles.css?v=2.1.12',
+  './assets/app.js?v=2.1.12',
   './assets/terms-data.js',
   './assets/syllabus-terms.js',
   './assets/subject-a-data.js',
