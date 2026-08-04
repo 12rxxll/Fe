@@ -54,6 +54,8 @@ let memorizationRotationPauseUntil = 0;
 let knowledgeUiSaveTimer = null;
 let settingsAutoSaveTimer = null;
 let keyboardStateTimer = null;
+let memorizationPanelRenderTimer = null;
+let memorizationPanelLastRenderAt = 0;
 const memorizationRuntime = {
   enabled:false,
   sensorWanted:false,
@@ -1488,7 +1490,7 @@ function bindMemorizationControls(){
   let holdRevealActive=false,touchHoldActive=false;
   const startHoldReveal=event=>{
     if(memorizationSettings().manualMode!=='hold'||!memorizationRuntime.enabled)return;
-    event?.preventDefault?.();
+    if(event?.cancelable!==false)event?.preventDefault?.();
     if(event?.type==='touchstart')touchHoldActive=true;
     holdRevealActive=true;
     startManualMemorizationReveal();
@@ -1498,9 +1500,9 @@ function bindMemorizationControls(){
   };
   const stopHoldReveal=event=>{
     if(event?.type==='pointercancel'&&touchHoldActive)return;
-    if(memorizationSettings().manualMode!=='hold'&&!holdRevealActive)return;
-    event?.preventDefault?.();
+    const shouldStop=holdRevealActive||Boolean(memorizationRuntime.manualRevealTermId);
     if(event?.type==='touchend'||event?.type==='touchcancel')touchHoldActive=false;
+    if(!shouldStop)return;
     if(!holdRevealActive&&!memorizationRuntime.manualRevealTermId)return;
     holdRevealActive=false;
     stopManualMemorizationReveal();
@@ -1514,7 +1516,8 @@ function bindMemorizationControls(){
   reveal.addEventListener('mousedown',startHoldReveal);
   ['mouseup','mouseleave','blur'].forEach(type=>reveal.addEventListener(type,stopHoldReveal));
   window.addEventListener('pointerup',stopHoldReveal);
-  window.addEventListener('touchend',stopHoldReveal,{passive:false});
+  window.addEventListener('touchend',stopHoldReveal,{passive:true});
+  window.addEventListener('touchcancel',stopHoldReveal,{passive:true});
   window.addEventListener('blur',stopHoldReveal);
   reveal.addEventListener('click',()=>{
     if(memorizationSettings().manualMode==='tap')toggleManualMemorizationReveal();
@@ -1691,9 +1694,10 @@ function handleMemorizationOrientation(event){
   }
   const now=Date.now();
   if(document.hidden||now<memorizationRotationPauseUntil){
+    const hadSensorReveal=Boolean(memorizationRuntime.sensorRevealTermId);
     memorizationRuntime.sensorRevealTermId='';
-    renderMemorizationPanel();
-    applyMemorizationCovers();
+    if(hadSensorReveal)applyMemorizationCovers();
+    else queueMemorizationPanelRender();
     return;
   }
   const settings=memorizationSettings();
@@ -1703,7 +1707,7 @@ function handleMemorizationOrientation(event){
   if(memorizationRuntime.samples.length>8)memorizationRuntime.samples.shift();
   memorizationRuntime.smoothTilt=memorizationRuntime.samples.reduce((sum,value)=>sum+value,0)/memorizationRuntime.samples.length;
   if(memorizationRuntime.allVisible||memorizationRuntime.manualRevealTermId||memorizationRuntime.manualToggleTermId){
-    renderMemorizationPanel();
+    queueMemorizationPanelRender();
     return;
   }
   if(memorizationRuntime.sensorRevealTermId){
@@ -1726,7 +1730,7 @@ function handleMemorizationOrientation(event){
   } else {
     memorizationRuntime.tiltHoldStart=0;
   }
-  renderMemorizationPanel();
+  queueMemorizationPanelRender();
 }
 function handleMemorizationVisibilityChange(){
   if(!memorizationRuntime.enabled)return;
@@ -1840,7 +1844,21 @@ function memorizationDecisionText(){
   if(memorizationRuntime.sensorRevealTermId)return '傾きで表示中';
   return '答えを隠しています';
 }
+function queueMemorizationPanelRender(minDelay=120){
+  const now=Date.now(),elapsed=now-memorizationPanelLastRenderAt,remaining=minDelay-elapsed;
+  if(remaining<=0){
+    if(memorizationPanelRenderTimer){clearTimeout(memorizationPanelRenderTimer);memorizationPanelRenderTimer=null;}
+    renderMemorizationPanel();
+    return;
+  }
+  if(memorizationPanelRenderTimer)return;
+  memorizationPanelRenderTimer=setTimeout(()=>{
+    memorizationPanelRenderTimer=null;
+    renderMemorizationPanel();
+  },remaining);
+}
 function renderMemorizationPanel(){
+  memorizationPanelLastRenderAt=Date.now();
   const mode=$('memorizationModeToggle');if(!mode)return;
   const settings=memorizationSettings(),sensor=$('memorizationSensorToggle'),badge=$('memorizationStatusBadge'),hint=$('memorizationHint'),reveal=$('memorizationRevealButton'),all=$('memorizationAllButton'),recalibrate=$('memorizationRecalibrateButton'),panel=$('memorizationSensorPanel'),panelBody=$('memorizationSensorPanelBody'),panelToggle=$('memorizationPanelToggle');
   mode.checked=memorizationRuntime.enabled;
