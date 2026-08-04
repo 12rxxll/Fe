@@ -53,8 +53,8 @@ def make_pdf() -> None:
                 [
                     ("FONTNAME", (0, 0), (-1, -1), "ReportMincho"),
                     ("FONTNAME", (0, 0), (0, -1), "ReportGothic"),
-                    ("FONTSIZE", (0, 0), (0, -1), 13),
-                    ("LEADING", (0, 0), (0, -1), 17),
+                    ("FONTSIZE", (0, 0), (0, -1), 10.5),
+                    ("LEADING", (0, 0), (0, -1), 14.5),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("BACKGROUND", (0, 0), (-1, -1), colors.white),
                     ("BOX", (0, 0), (-1, -1), 0.6, colors.black),
