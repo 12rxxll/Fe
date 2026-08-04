@@ -1485,19 +1485,37 @@ function hydrateMemorizationRuntime(){
 function bindMemorizationControls(){
   const mode=$('memorizationModeToggle'),sensor=$('memorizationSensorToggle'),reveal=$('memorizationRevealButton'),all=$('memorizationAllButton'),recalibrate=$('memorizationRecalibrateButton'),panelToggle=$('memorizationPanelToggle');
   if(!mode||!sensor||!reveal||!all||!recalibrate)return;
+  let holdRevealActive=false,touchHoldActive=false;
+  const startHoldReveal=event=>{
+    if(memorizationSettings().manualMode!=='hold'||!memorizationRuntime.enabled)return;
+    event?.preventDefault?.();
+    if(event?.type==='touchstart')touchHoldActive=true;
+    holdRevealActive=true;
+    startManualMemorizationReveal();
+    if(event?.pointerId!==undefined){
+      try{reveal.setPointerCapture?.(event.pointerId);}catch(e){}
+    }
+  };
+  const stopHoldReveal=event=>{
+    if(event?.type==='pointercancel'&&touchHoldActive)return;
+    if(memorizationSettings().manualMode!=='hold'&&!holdRevealActive)return;
+    event?.preventDefault?.();
+    if(event?.type==='touchend'||event?.type==='touchcancel')touchHoldActive=false;
+    if(!holdRevealActive&&!memorizationRuntime.manualRevealTermId)return;
+    holdRevealActive=false;
+    stopManualMemorizationReveal();
+  };
   mode.addEventListener('change',()=>setMemorizationMode(mode.checked,{persist:true,userGesture:true}));
   sensor.addEventListener('change',()=>setMemorizationSensor(sensor.checked,{persist:true,userGesture:true}));
-  reveal.addEventListener('pointerdown',event=>{
-    if(memorizationSettings().manualMode!=='hold'||!memorizationRuntime.enabled)return;
-    event.preventDefault();
-    reveal.setPointerCapture?.(event.pointerId);
-    startManualMemorizationReveal();
-  });
-  ['pointerup','pointercancel','pointerleave'].forEach(type=>reveal.addEventListener(type,event=>{
-    if(memorizationSettings().manualMode!=='hold')return;
-    event.preventDefault();
-    stopManualMemorizationReveal();
-  }));
+  reveal.addEventListener('pointerdown',startHoldReveal);
+  ['pointerup','pointercancel','lostpointercapture'].forEach(type=>reveal.addEventListener(type,stopHoldReveal));
+  reveal.addEventListener('touchstart',startHoldReveal,{passive:false});
+  ['touchend','touchcancel'].forEach(type=>reveal.addEventListener(type,stopHoldReveal,{passive:false}));
+  reveal.addEventListener('mousedown',startHoldReveal);
+  ['mouseup','mouseleave','blur'].forEach(type=>reveal.addEventListener(type,stopHoldReveal));
+  window.addEventListener('pointerup',stopHoldReveal);
+  window.addEventListener('touchend',stopHoldReveal,{passive:false});
+  window.addEventListener('blur',stopHoldReveal);
   reveal.addEventListener('click',()=>{
     if(memorizationSettings().manualMode==='tap')toggleManualMemorizationReveal();
   });
